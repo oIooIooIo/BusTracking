@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Bus Tracking</string>
+    <string name="tracking_channel">Bus location tracking</string>
+    <string name="tracking_notification">Recording bus GPS every 10 seconds</string>
+</resources>

@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: bus_tracking
+      POSTGRES_USER: bus_tracking
+      POSTGRES_PASSWORD: bus_tracking
+    ports:
+      - "5432:5432"
+    volumes:
+      - bus_tracking_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bus_tracking -d bus_tracking"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - bus_tracking_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  bus_tracking_postgres:
+  bus_tracking_redis:

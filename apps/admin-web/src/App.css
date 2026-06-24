@@ -1,0 +1,76 @@
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  min-height: 100vh;
+  background: #f4f7fb;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+  border-bottom: 1px solid #e7ebf0;
+  padding: 0 32px;
+}
+
+.app-header h3 {
+  margin: 0;
+}
+
+.brand-icon {
+  color: #1677ff;
+  font-size: 24px;
+}
+
+.app-content {
+  padding: 24px 32px;
+}
+
+.summary-row {
+  margin: 16px 0 24px;
+}
+
+.toolbar {
+  margin-bottom: 20px;
+}
+
+.route-map {
+  height: 560px;
+  width: 100%;
+  border-radius: 8px;
+}
+
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at top left, rgba(22, 119, 255, 0.18), transparent 35%),
+    #f4f7fb;
+}
+
+.login-card {
+  width: min(420px, calc(100vw - 32px));
+  box-shadow: 0 20px 60px rgba(27, 50, 80, 0.12);
+}
+
+.login-card .ant-alert {
+  margin-bottom: 18px;
+}
+
+@media (max-width: 640px) {
+  .app-header {
+    padding: 0 16px;
+  }
+
+  .app-content {
+    padding: 16px;
+  }
+
+  .route-map {
+    height: 420px;
+  }
+}
