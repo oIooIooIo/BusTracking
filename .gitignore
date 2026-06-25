@@ -35,3 +35,6 @@ Thumbs.db
 # Runtime data at the repository root only
 /data/
 /logs/
+
+# Offline deployment artifacts
+/offline-package/

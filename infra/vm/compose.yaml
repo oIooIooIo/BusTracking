@@ -26,8 +26,7 @@ services:
       retries: 20
 
   backend:
-    build:
-      context: ../../services/backend
+    image: ${BACKEND_IMAGE:-bus-tracking-backend:0.1.0}
     restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
@@ -47,15 +46,14 @@ services:
       - "8080:8080"
 
   admin-web:
-    build:
-      context: ../../apps/admin-web
-      args:
-        VITE_API_URL: /api/admin/v1
+    image: ${ADMIN_WEB_IMAGE:-bus-tracking-admin-web:0.1.0}
     restart: unless-stopped
     depends_on:
       - backend
+    volumes:
+      - ${TLS_CERT_DIR:-/opt/bus-tracking/secrets/tls}:/etc/nginx/tls:ro
     ports:
-      - "80:80"
+      - "443:443"
 
 volumes:
   postgres-data:
