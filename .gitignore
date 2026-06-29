@@ -38,3 +38,4 @@ Thumbs.db
 
 # Offline deployment artifacts
 /offline-package/
+/local-runtime/
