@@ -27,17 +27,26 @@ The debug APK is generated under `app/build/outputs/apk/debug`.
 
 ## Demo Configuration
 
-The emulator build uses:
+The default demo APK uses:
 
-- API base URL: `http://10.0.2.2:8080/api/device/v1/`
+- API base URL: `https://taxiportal-dev.fushan.fihnbb.com/api/device/v1/`
 - Shared device API key: `demo-device-key`
+- Cleartext HTTP traffic: disabled
 
-For a physical bus device, pass the backend computer's LAN address when
-building:
+For a different HTTPS endpoint, pass the target device API URL when building:
 
 ```bash
 ./gradlew :app:assembleDebug \
-  -PapiBaseUrl=http://192.168.20.117:8080/api/device/v1/
+  -PapiBaseUrl=https://bus.example.internal/api/device/v1/
+```
+
+For local emulator development against a local backend, pass the local device
+API URL explicitly and enable cleartext traffic only for that local build:
+
+```bash
+./gradlew :app:assembleDebug \
+  -PapiBaseUrl=http://<local-device-api-url>/ \
+  -PusesCleartextTraffic=true
 ```
 
 Every API request includes the shared API key and

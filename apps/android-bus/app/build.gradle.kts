@@ -5,9 +5,11 @@ plugins {
 }
 
 val apiBaseUrl = providers.gradleProperty("apiBaseUrl")
-    .getOrElse("http://10.0.2.2:8080/api/device/v1/")
+    .getOrElse("https://taxiportal-dev.fushan.fihnbb.com/api/device/v1/")
 val deviceApiKey = providers.gradleProperty("deviceApiKey")
     .getOrElse("demo-device-key")
+val usesCleartextTraffic = providers.gradleProperty("usesCleartextTraffic")
+    .getOrElse("false")
 
 android {
     namespace = "com.company.bustracking"
@@ -22,6 +24,7 @@ android {
 
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         buildConfigField("String", "DEVICE_API_KEY", "\"$deviceApiKey\"")
+        manifestPlaceholders["usesCleartextTraffic"] = usesCleartextTraffic
     }
 
     buildFeatures {

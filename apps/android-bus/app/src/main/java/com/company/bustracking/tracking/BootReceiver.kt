@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
+import com.company.bustracking.MainActivity
 import com.company.bustracking.sync.SyncScheduler
 
 class BootReceiver : BroadcastReceiver() {
@@ -17,14 +18,26 @@ class BootReceiver : BroadcastReceiver() {
         }
         SyncScheduler.schedulePeriodic(context)
         SyncScheduler.enqueueNow(context)
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
-            == PackageManager.PERMISSION_GRANTED
-        ) {
-            ContextCompat.startForegroundService(
-                context,
-                Intent(context, LocationTrackingService::class.java),
-            )
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
+            launchMainActivity(context)
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED
+            ) {
+                ContextCompat.startForegroundService(
+                    context,
+                    Intent(context, LocationTrackingService::class.java),
+                )
+            }
         }
+    }
+
+    private fun launchMainActivity(context: Context) {
+        val launchIntent = Intent(context, MainActivity::class.java).apply {
+            action = Intent.ACTION_MAIN
+            addCategory(Intent.CATEGORY_LAUNCHER)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        context.startActivity(launchIntent)
     }
 }

@@ -22,6 +22,7 @@ import {
   Typography,
 } from 'antd'
 import {
+  EditOutlined,
   EnvironmentOutlined,
   IdcardOutlined,
   LogoutOutlined,
@@ -344,6 +345,7 @@ function PermissionPanel({
 }) {
   const [allowed, setAllowed] = useState<Employee[]>([])
   const [employeeModal, setEmployeeModal] = useState(false)
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
 
   const loadPermissions = useCallback(async () => {
     if (selectedBusId) {
@@ -370,7 +372,15 @@ function PermissionPanel({
     <Card>
       <Space wrap className="toolbar">
         <BusSelector buses={buses} value={selectedBusId} onChange={setSelectedBusId} />
-        <Button icon={<IdcardOutlined />} onClick={() => setEmployeeModal(true)}>Add employee</Button>
+        <Button
+          icon={<IdcardOutlined />}
+          onClick={() => {
+            setEditingEmployee(null)
+            setEmployeeModal(true)
+          }}
+        >
+          Add employee
+        </Button>
       </Space>
       <List
         dataSource={employees}
@@ -378,6 +388,17 @@ function PermissionPanel({
         renderItem={(employee) => (
           <List.Item
             actions={[
+              <Button
+                key="edit"
+                type="link"
+                icon={<EditOutlined />}
+                onClick={() => {
+                  setEditingEmployee(employee)
+                  setEmployeeModal(true)
+                }}
+              >
+                Edit
+              </Button>,
               <Checkbox
                 key="allow"
                 checked={allowedIds.has(employee.id)}
@@ -395,22 +416,63 @@ function PermissionPanel({
           </List.Item>
         )}
       />
-      <CreateEmployeeModal open={employeeModal} onClose={() => setEmployeeModal(false)} client={client} reload={reload} />
+      <EmployeeModal
+        open={employeeModal}
+        employee={editingEmployee}
+        onClose={() => setEmployeeModal(false)}
+        client={client}
+        reload={reload}
+      />
     </Card>
   )
 }
 
-function CreateEmployeeModal({ open, onClose, client, reload }: { open: boolean; onClose: () => void; client: Client; reload: () => Promise<void> }) {
+function EmployeeModal({
+  open,
+  employee,
+  onClose,
+  client,
+  reload,
+}: {
+  open: boolean
+  employee: Employee | null
+  onClose: () => void
+  client: Client
+  reload: () => Promise<void>
+}) {
   const [form] = Form.useForm()
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    form.setFieldsValue(employee ?? { employeeNo: '', name: '', cardSn: '', active: true })
+  }, [employee, form, open])
+
   const save = async (values: Omit<Employee, 'id'>) => {
-    await client.createEmployee(values)
-    form.resetFields()
-    onClose()
-    await reload()
+    setSaving(true)
+    try {
+      if (employee) await client.updateEmployee(employee.id, values)
+      else await client.createEmployee(values)
+      await reload()
+      message.success(employee ? 'Employee updated' : 'Employee added')
+      form.resetFields()
+      onClose()
+    } catch (cause) {
+      message.error(cause instanceof Error ? cause.message : 'Unable to save employee')
+    } finally {
+      setSaving(false)
+    }
   }
   return (
-    <Modal open={open} title="Add employee" onCancel={onClose} onOk={() => form.submit()} destroyOnHidden>
-      <Form form={form} layout="vertical" onFinish={save} initialValues={{ active: true }}>
+    <Modal
+      open={open}
+      title={employee ? 'Edit employee' : 'Add employee'}
+      onCancel={onClose}
+      onOk={() => form.submit()}
+      confirmLoading={saving}
+      destroyOnHidden
+    >
+      <Form form={form} layout="vertical" onFinish={save}>
         <Form.Item name="employeeNo" label="Employee number" rules={[{ required: true }]}><Input /></Form.Item>
         <Form.Item name="name" label="Name" rules={[{ required: true }]}><Input /></Form.Item>
         <Form.Item name="cardSn" label="CardSN" rules={[{ required: true }]}><Input /></Form.Item>

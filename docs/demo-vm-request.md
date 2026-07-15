@@ -43,9 +43,9 @@ devices will upload GPS and NFC boarding events to this server.
 ## External Connectivity
 
 - Android bus devices must be able to reach the VM API, for example:
-  `http://<VM-IP>/api/device/v1/`
+  `https://<VM-IP-or-DNS>/api/device/v1/`
 - Admin Web must be able to reach the backend API, for example:
-  `http://<VM-IP>/api/admin/v1`
+  `https://<VM-IP-or-DNS>/api/admin/v1`
 - The Admin Web map uses OpenStreetMap tiles:
   `https://{s}.tile.openstreetmap.org/...`
 

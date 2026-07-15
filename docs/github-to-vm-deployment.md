@@ -101,7 +101,7 @@ docker compose ps
 curl -f http://localhost:8080/actuator/health
 ```
 
-管理介面為 `https://VM_IP_OR_DNS/`；後端 Swagger 為 `http://VM_IP:8080/swagger-ui.html`；Android 裝置 API 使用 `http://VM_IP:8080`。資料庫資料保存在 Docker named volumes，正常更新服務不會刪除資料。
+管理介面為 `https://VM_IP_OR_DNS/`；後端 Swagger 可在 VM 內以 `http://localhost:8080/swagger-ui.html` 檢查；Android 裝置 API 使用 `https://VM_IP_OR_DNS/api/device/v1/`。資料庫資料保存在 Docker named volumes，正常更新服務不會刪除資料。
 
 ## 之後每次發布
 

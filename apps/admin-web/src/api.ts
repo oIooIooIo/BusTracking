@@ -80,6 +80,8 @@ export function api(credentials: Credentials) {
     employees: () => request<Employee[]>('/employees'),
     createEmployee: (input: Omit<Employee, 'id'>) =>
       request<Employee>('/employees', { method: 'POST', body: JSON.stringify(input) }),
+    updateEmployee: (employeeId: string, input: Omit<Employee, 'id'>) =>
+      request<Employee>(`/employees/${employeeId}`, { method: 'PUT', body: JSON.stringify(input) }),
     permissions: (busId: string) => request<Employee[]>(`/buses/${busId}/permissions`),
     grant: (busId: string, employeeId: string) =>
       request<void>(`/buses/${busId}/permissions/${employeeId}`, { method: 'PUT' }),
