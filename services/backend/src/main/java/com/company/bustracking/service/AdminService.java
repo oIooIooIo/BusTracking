@@ -2,27 +2,31 @@ package com.company.bustracking.service;
 
 import com.company.bustracking.api.AdminApi.BoardingEventView;
 import com.company.bustracking.api.AdminApi.BusInput;
+import com.company.bustracking.api.AdminApi.BusUpdateInput;
 import com.company.bustracking.api.AdminApi.BusView;
-import com.company.bustracking.api.AdminApi.EmployeeInput;
-import com.company.bustracking.api.AdminApi.EmployeeView;
+import com.company.bustracking.api.AdminApi.DeviceAssignmentView;
 import com.company.bustracking.api.AdminApi.DeviceInput;
 import com.company.bustracking.api.AdminApi.DeviceView;
+import com.company.bustracking.api.AdminApi.EmployeeInput;
+import com.company.bustracking.api.AdminApi.EmployeeView;
 import com.company.bustracking.domain.BoardingEvent;
 import com.company.bustracking.domain.Bus;
 import com.company.bustracking.domain.BusEmployeePermission;
 import com.company.bustracking.domain.BusEmployeePermissionId;
-import com.company.bustracking.domain.Employee;
 import com.company.bustracking.domain.Device;
+import com.company.bustracking.domain.DeviceAssignmentHistory;
+import com.company.bustracking.domain.Employee;
 import com.company.bustracking.repository.BoardingEventRepository;
 import com.company.bustracking.repository.BusRepository;
-import com.company.bustracking.repository.EmployeeRepository;
+import com.company.bustracking.repository.DeviceAssignmentHistoryRepository;
 import com.company.bustracking.repository.DeviceRepository;
+import com.company.bustracking.repository.EmployeeRepository;
 import com.company.bustracking.repository.PermissionRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,119 +38,117 @@ public class AdminService {
     private final BusRepository buses;
     private final EmployeeRepository employees;
     private final DeviceRepository devices;
+    private final DeviceAssignmentHistoryRepository assignmentHistory;
     private final PermissionRepository permissions;
     private final BoardingEventRepository events;
     private final TrackingStore tracking;
 
-    public AdminService(
-            BusRepository buses,
-            EmployeeRepository employees,
-            DeviceRepository devices,
-            PermissionRepository permissions,
-            BoardingEventRepository events,
-            TrackingStore tracking) {
+    public AdminService(BusRepository buses, EmployeeRepository employees, DeviceRepository devices,
+            DeviceAssignmentHistoryRepository assignmentHistory, PermissionRepository permissions,
+            BoardingEventRepository events, TrackingStore tracking) {
         this.buses = buses;
         this.employees = employees;
         this.devices = devices;
+        this.assignmentHistory = assignmentHistory;
         this.permissions = permissions;
         this.events = events;
         this.tracking = tracking;
     }
 
     @Transactional(readOnly = true)
-    public List<BusView> buses() {
-        return buses.findAll().stream().map(this::toBusView).toList();
-    }
+    public List<BusView> buses() { return buses.findAll().stream().map(this::toBusView).toList(); }
 
     @Transactional
     public BusView createBus(BusInput input) {
-        Bus bus = buses.save(new Bus(
-                input.code().trim(),
-                input.name().trim(),
-                input.active()));
-        devices.save(new Device(
-                bus.getCode() + "-DEVICE",
-                normalizeHardwareSerial(input.hardwareSerial()),
-                bus,
-                input.active()));
+        validateBusIdentity(null, input.code());
+        Bus bus = buses.save(new Bus(input.code().trim(), input.name().trim(), input.active()));
+        Device device = devices.save(new Device(bus.getCode() + "-DEVICE",
+                normalizeHardwareSerial(input.hardwareSerial()), bus, input.active()));
+        assignmentHistory.save(new DeviceAssignmentHistory(device, bus, Instant.now()));
         return toBusView(bus);
     }
 
     @Transactional
-    public BusView updateBus(UUID id, BusInput input) {
+    public BusView updateBus(UUID id, BusUpdateInput input) {
         Bus bus = bus(id);
+        validateBusIdentity(id, input.code());
+        if (bus.isActive() && !input.active() && devices.existsByBus_IdAndActiveTrue(id)) {
+            throw new IllegalArgumentException("Deactivate the bus device before retiring this bus");
+        }
+        if (!bus.isActive() && input.active() && input.clearPermissions() && permissions.countByBus_Id(id) > 0) {
+            permissions.deleteByBus_Id(id);
+            bus.incrementPermissionVersion();
+        }
         bus.update(input.code().trim(), input.name().trim(), input.active());
-        Device device = devices.findFirstByBus_IdOrderByActiveDesc(id)
-                .orElseGet(() -> new Device(
-                        bus.getCode() + "-DEVICE",
-                        normalizeHardwareSerial(input.hardwareSerial()),
-                        bus,
-                        input.active()));
-        device.update(
-                bus.getCode() + "-DEVICE",
-                normalizeHardwareSerial(input.hardwareSerial()),
-                bus,
-                input.active());
-        devices.save(device);
         return toBusView(buses.save(bus));
     }
 
     @Transactional(readOnly = true)
-    public List<DeviceView> devices() {
-        return devices.findAll().stream().map(AdminService::toView).toList();
-    }
+    public List<DeviceView> devices() { return devices.findAll().stream().map(AdminService::toView).toList(); }
 
     @Transactional
     public DeviceView createDevice(DeviceInput input) {
-        return toView(devices.save(new Device(
-                input.deviceCode().trim(),
-                normalizeHardwareSerial(input.hardwareSerial()),
-                bus(input.busId()),
-                input.active())));
+        validateDeviceIdentity(null, input.deviceCode(), input.hardwareSerial());
+        Bus bus = activeBus(input.busId());
+        validateActiveDevice(null, bus, input.active());
+        Device device = devices.save(new Device(input.deviceCode().trim(),
+                normalizeHardwareSerial(input.hardwareSerial()), bus, input.active()));
+        assignmentHistory.save(new DeviceAssignmentHistory(device, bus, Instant.now()));
+        return toView(device);
     }
 
     @Transactional
     public DeviceView updateDevice(UUID id, DeviceInput input) {
-        Device device = devices.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Device not found: " + id));
-        device.update(
-                input.deviceCode().trim(),
-                normalizeHardwareSerial(input.hardwareSerial()),
-                bus(input.busId()),
-                input.active());
+        Device device = device(id);
+        validateDeviceIdentity(id, input.deviceCode(), input.hardwareSerial());
+        Bus targetBus = activeBus(input.busId());
+        validateActiveDevice(id, targetBus, input.active());
+        boolean reassigned = !device.getBus().getId().equals(targetBus.getId());
+        if (reassigned) {
+            Instant now = Instant.now();
+            assignmentHistory.findByDevice_IdAndRemovedAtIsNull(id).ifPresent(history -> history.close(now));
+            assignmentHistory.flush();
+            assignmentHistory.save(new DeviceAssignmentHistory(device, targetBus, now));
+        }
+        device.update(input.deviceCode().trim(), normalizeHardwareSerial(input.hardwareSerial()),
+                targetBus, input.active());
         return toView(devices.save(device));
     }
 
     @Transactional(readOnly = true)
-    public List<EmployeeView> employees() {
-        return employees.findAll().stream().map(AdminService::toView).toList();
+    public List<DeviceAssignmentView> assignmentHistory(UUID deviceId) {
+        device(deviceId);
+        return assignmentHistory.findByDevice_IdOrderByInstalledAtDesc(deviceId).stream()
+                .map(AdminService::toView).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<EmployeeView> employees(String employeeNo) {
+        var result = employeeNo == null || employeeNo.isBlank()
+                ? employees.findAll()
+                : employees.findTop50ByEmployeeNoContainingIgnoreCaseOrderByEmployeeNo(employeeNo.trim());
+        return result.stream().map(AdminService::toView).toList();
     }
 
     @Transactional
     public EmployeeView createEmployee(EmployeeInput input) {
-        return toView(employees.save(new Employee(
-                input.employeeNo().trim(),
-                input.name().trim(),
-                input.cardSn().trim(),
-                input.active())));
+        validateEmployeeIdentity(null, input.employeeNo(), input.cardSn());
+        return toView(employees.save(new Employee(input.employeeNo().trim(), input.name().trim(),
+                input.cardSn().trim(), input.active())));
     }
 
     @Transactional
     public EmployeeView updateEmployee(UUID id, EmployeeInput input) {
         Employee employee = employee(id);
+        validateEmployeeIdentity(id, input.employeeNo(), input.cardSn());
         boolean snapshotChanged = !employee.getEmployeeNo().equals(input.employeeNo().trim())
                 || !employee.getName().equals(input.name().trim())
                 || !employee.getCardSn().equals(input.cardSn().trim())
                 || employee.isActive() != input.active();
-        employee.update(
-                input.employeeNo().trim(),
-                input.name().trim(),
-                input.cardSn().trim(),
-                input.active());
+        employee.update(input.employeeNo().trim(), input.name().trim(), input.cardSn().trim(), input.active());
         employees.save(employee);
         if (snapshotChanged) {
-            permissions.findByEmployee_Id(id).stream()
-                    .map(BusEmployeePermission::getBus)
+            permissions.findByEmployee_Id(id).stream().map(BusEmployeePermission::getBus)
                     .forEach(Bus::incrementPermissionVersion);
         }
         return toView(employee);
@@ -156,20 +158,29 @@ public class AdminService {
     public List<EmployeeView> permissions(UUID busId) {
         bus(busId);
         return permissions.findByBus_IdOrderByEmployee_EmployeeNo(busId).stream()
-                .map(BusEmployeePermission::getEmployee)
-                .map(AdminService::toView)
-                .toList();
+                .map(BusEmployeePermission::getEmployee).map(AdminService::toView).toList();
     }
 
     @Transactional
-    public void grant(UUID busId, UUID employeeId) {
+    public void grant(UUID busId, UUID employeeId) { grantBatch(busId, List.of(employeeId)); }
+
+    @Transactional
+    public void grantBatch(UUID busId, List<UUID> employeeIds) {
         Bus bus = bus(busId);
-        Employee employee = employee(employeeId);
-        BusEmployeePermissionId id = new BusEmployeePermissionId(busId, employeeId);
-        if (!permissions.existsById(id)) {
-            permissions.save(new BusEmployeePermission(bus, employee));
-            bus.incrementPermissionVersion();
+        List<UUID> uniqueIds = new LinkedHashSet<>(employeeIds).stream().toList();
+        List<Employee> selected = uniqueIds.stream().map(this::employee).toList();
+        if (selected.stream().anyMatch(employee -> !employee.isActive())) {
+            throw new IllegalArgumentException("Inactive employees cannot be granted boarding permission");
         }
+        boolean changed = false;
+        for (Employee employee : selected) {
+            BusEmployeePermissionId id = new BusEmployeePermissionId(busId, employee.getId());
+            if (!permissions.existsById(id)) {
+                permissions.save(new BusEmployeePermission(bus, employee));
+                changed = true;
+            }
+        }
+        if (changed) bus.incrementPermissionVersion();
     }
 
     @Transactional
@@ -184,84 +195,84 @@ public class AdminService {
 
     @Transactional(readOnly = true)
     public List<TrackingStore.RoutePoint> route(UUID busId, Instant from, Instant to) {
-        bus(busId);
-        validateRange(from, to);
-        return tracking.route(busId, from, to);
+        bus(busId); validateRange(from, to); return tracking.route(busId, from, to);
     }
 
     @Transactional(readOnly = true)
     public List<BoardingEventView> boardingEvents(UUID busId, Instant from, Instant to) {
-        bus(busId);
-        validateRange(from, to);
+        bus(busId); validateRange(from, to);
         return events.findTop1000ByBus_IdAndScannedAtBetweenOrderByScannedAtDesc(busId, from, to)
-                .stream()
-                .map(AdminService::toView)
-                .toList();
+                .stream().map(AdminService::toView).toList();
+    }
+
+    private void validateBusIdentity(UUID id, String code) {
+        String value = code.trim();
+        boolean exists = id == null ? buses.existsByCodeIgnoreCase(value) : buses.existsByCodeIgnoreCaseAndIdNot(value, id);
+        if (exists) throw new IllegalArgumentException("Bus code already exists");
+    }
+
+    private void validateDeviceIdentity(UUID id, String deviceCode, String hardwareSerial) {
+        String code = deviceCode.trim();
+        String serial = normalizeHardwareSerial(hardwareSerial);
+        boolean codeExists = id == null ? devices.existsByDeviceCodeIgnoreCase(code) : devices.existsByDeviceCodeIgnoreCaseAndIdNot(code, id);
+        boolean serialExists = id == null ? devices.existsByHardwareSerialIgnoreCase(serial) : devices.existsByHardwareSerialIgnoreCaseAndIdNot(serial, id);
+        if (codeExists) throw new IllegalArgumentException("Device code already exists");
+        if (serialExists) throw new IllegalArgumentException("Hardware serial already exists");
+    }
+
+    private void validateEmployeeIdentity(UUID id, String employeeNo, String cardSn) {
+        String number = employeeNo.trim();
+        String serial = cardSn.trim();
+        boolean numberExists = id == null ? employees.existsByEmployeeNoIgnoreCase(number) : employees.existsByEmployeeNoIgnoreCaseAndIdNot(number, id);
+        boolean cardExists = id == null ? employees.existsByCardSnIgnoreCase(serial) : employees.existsByCardSnIgnoreCaseAndIdNot(serial, id);
+        if (numberExists) throw new IllegalArgumentException("Employee number already exists");
+        if (cardExists) throw new IllegalArgumentException("CardSN already exists");
+    }
+
+    private void validateActiveDevice(UUID deviceId, Bus bus, boolean active) {
+        if (!active) return;
+        boolean occupied = deviceId == null ? devices.existsByBus_IdAndActiveTrue(bus.getId())
+                : devices.existsByBus_IdAndActiveTrueAndIdNot(bus.getId(), deviceId);
+        if (occupied) throw new IllegalArgumentException("This bus already has an active device");
     }
 
     private void validateRange(Instant from, Instant to) {
-        if (from == null || to == null || !from.isBefore(to)) {
-            throw new IllegalArgumentException("from must be before to");
-        }
-        if (Duration.between(from, to).compareTo(MAX_ROUTE_RANGE) > 0) {
+        if (from == null || to == null || !from.isBefore(to)) throw new IllegalArgumentException("from must be before to");
+        if (Duration.between(from, to).compareTo(MAX_ROUTE_RANGE) > 0)
             throw new IllegalArgumentException("The maximum query range is 24 hours");
-        }
     }
 
-    private Bus bus(UUID id) {
-        return buses.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Bus not found: " + id));
+    private Bus bus(UUID id) { return buses.findById(id).orElseThrow(() -> new EntityNotFoundException("Bus not found: " + id)); }
+    private Bus activeBus(UUID id) {
+        Bus bus = bus(id);
+        if (!bus.isActive()) throw new IllegalArgumentException("Devices can only be assigned to an active bus");
+        return bus;
     }
-
-    private Employee employee(UUID id) {
-        return employees.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Employee not found: " + id));
-    }
+    private Device device(UUID id) { return devices.findById(id).orElseThrow(() -> new EntityNotFoundException("Device not found: " + id)); }
+    private Employee employee(UUID id) { return employees.findById(id).orElseThrow(() -> new EntityNotFoundException("Employee not found: " + id)); }
 
     private BusView toBusView(Bus bus) {
-        String hardwareSerial = devices.findFirstByBus_IdOrderByActiveDesc(bus.getId())
-                .map(Device::getHardwareSerial)
-                .orElse(null);
-        return new BusView(
-                bus.getId(),
-                bus.getCode(),
-                bus.getName(),
-                hardwareSerial,
-                bus.isActive(),
-                bus.getPermissionVersion());
+        String serial = devices.findFirstByBus_IdOrderByActiveDesc(bus.getId()).map(Device::getHardwareSerial).orElse(null);
+        return new BusView(bus.getId(), bus.getCode(), bus.getName(), serial, bus.isActive(),
+                bus.getPermissionVersion(), permissions.countByBus_Id(bus.getId()));
     }
-
     private static DeviceView toView(Device device) {
-        return new DeviceView(
-                device.getId(),
-                device.getDeviceCode(),
-                device.getHardwareSerial(),
-                device.getBus().getId(),
-                device.getBus().getCode(),
-                device.isActive(),
-                device.getLastSeenAt());
+        return new DeviceView(device.getId(), device.getDeviceCode(), device.getHardwareSerial(),
+                device.getBus().getId(), device.getBus().getCode(), device.isActive(), device.getLastSeenAt());
     }
-
-    private static String normalizeHardwareSerial(String hardwareSerial) {
-        return hardwareSerial.trim().toUpperCase(java.util.Locale.ROOT);
+    private static DeviceAssignmentView toView(DeviceAssignmentHistory history) {
+        return new DeviceAssignmentView(history.getId(), history.getDevice().getId(), history.getBus().getId(),
+                history.getBus().getCode(), history.getBus().getName(), history.getInstalledAt(), history.getRemovedAt());
     }
-
     private static EmployeeView toView(Employee employee) {
-        return new EmployeeView(
-                employee.getId(),
-                employee.getEmployeeNo(),
-                employee.getName(),
-                employee.getCardSn(),
-                employee.isActive());
+        return new EmployeeView(employee.getId(), employee.getEmployeeNo(), employee.getName(),
+                employee.getCardSn(), employee.isActive());
     }
-
     private static BoardingEventView toView(BoardingEvent event) {
-        return new BoardingEventView(
-                event.getId(),
-                event.getEmployeeId(),
-                event.getCardSn(),
-                event.getResult(),
-                event.getScannedAt(),
-                event.getPermissionVersion());
+        return new BoardingEventView(event.getId(), event.getEmployeeId(), event.getCardSn(),
+                event.getResult(), event.getScannedAt(), event.getPermissionVersion());
+    }
+    private static String normalizeHardwareSerial(String value) {
+        return value.trim().toUpperCase(java.util.Locale.ROOT);
     }
 }

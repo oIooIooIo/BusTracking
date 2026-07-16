@@ -11,4 +11,6 @@ public interface PermissionRepository
     List<BusEmployeePermission> findByBus_IdAndEmployee_ActiveTrueOrderByEmployee_EmployeeNo(UUID busId);
     List<BusEmployeePermission> findByBus_IdOrderByEmployee_EmployeeNo(UUID busId);
     List<BusEmployeePermission> findByEmployee_Id(UUID employeeId);
+    long countByBus_Id(UUID busId);
+    void deleteByBus_Id(UUID busId);
 }

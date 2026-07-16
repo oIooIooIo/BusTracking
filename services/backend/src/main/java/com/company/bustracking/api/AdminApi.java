@@ -27,149 +27,82 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/admin/v1")
 public class AdminApi {
     private final AdminService service;
+    public AdminApi(AdminService service) { this.service = service; }
 
-    public AdminApi(AdminService service) {
-        this.service = service;
-    }
-
-    @GetMapping("/buses")
-    List<BusView> buses() {
-        return service.buses();
-    }
-
-    @PostMapping("/buses")
-    @ResponseStatus(HttpStatus.CREATED)
-    BusView createBus(@Valid @RequestBody BusInput input) {
-        return service.createBus(input);
-    }
-
+    @GetMapping("/buses") List<BusView> buses() { return service.buses(); }
+    @PostMapping("/buses") @ResponseStatus(HttpStatus.CREATED)
+    BusView createBus(@Valid @RequestBody BusInput input) { return service.createBus(input); }
     @PutMapping("/buses/{busId}")
-    BusView updateBus(@PathVariable UUID busId, @Valid @RequestBody BusInput input) {
+    BusView updateBus(@PathVariable UUID busId, @Valid @RequestBody BusUpdateInput input) {
         return service.updateBus(busId, input);
     }
 
-    @GetMapping("/devices")
-    List<DeviceView> devices() {
-        return service.devices();
-    }
-
-    @PostMapping("/devices")
-    @ResponseStatus(HttpStatus.CREATED)
-    DeviceView createDevice(@Valid @RequestBody DeviceInput input) {
-        return service.createDevice(input);
-    }
-
+    @GetMapping("/devices") List<DeviceView> devices() { return service.devices(); }
+    @PostMapping("/devices") @ResponseStatus(HttpStatus.CREATED)
+    DeviceView createDevice(@Valid @RequestBody DeviceInput input) { return service.createDevice(input); }
     @PutMapping("/devices/{deviceId}")
-    DeviceView updateDevice(
-            @PathVariable UUID deviceId,
-            @Valid @RequestBody DeviceInput input) {
+    DeviceView updateDevice(@PathVariable UUID deviceId, @Valid @RequestBody DeviceInput input) {
         return service.updateDevice(deviceId, input);
+    }
+    @GetMapping("/devices/{deviceId}/assignment-history")
+    List<DeviceAssignmentView> assignmentHistory(@PathVariable UUID deviceId) {
+        return service.assignmentHistory(deviceId);
     }
 
     @GetMapping("/employees")
-    List<EmployeeView> employees() {
-        return service.employees();
+    List<EmployeeView> employees(@RequestParam(required = false) String employeeNo) {
+        return service.employees(employeeNo);
     }
-
-    @PostMapping("/employees")
-    @ResponseStatus(HttpStatus.CREATED)
-    EmployeeView createEmployee(@Valid @RequestBody EmployeeInput input) {
-        return service.createEmployee(input);
-    }
-
+    @PostMapping("/employees") @ResponseStatus(HttpStatus.CREATED)
+    EmployeeView createEmployee(@Valid @RequestBody EmployeeInput input) { return service.createEmployee(input); }
     @PutMapping("/employees/{employeeId}")
-    EmployeeView updateEmployee(
-            @PathVariable UUID employeeId,
-            @Valid @RequestBody EmployeeInput input) {
+    EmployeeView updateEmployee(@PathVariable UUID employeeId, @Valid @RequestBody EmployeeInput input) {
         return service.updateEmployee(employeeId, input);
     }
 
     @GetMapping("/buses/{busId}/permissions")
-    List<EmployeeView> permissions(@PathVariable UUID busId) {
-        return service.permissions(busId);
+    List<EmployeeView> permissions(@PathVariable UUID busId) { return service.permissions(busId); }
+    @PutMapping("/buses/{busId}/permissions/{employeeId}") @ResponseStatus(HttpStatus.NO_CONTENT)
+    void grant(@PathVariable UUID busId, @PathVariable UUID employeeId) { service.grant(busId, employeeId); }
+    @PostMapping("/buses/{busId}/permissions/batch") @ResponseStatus(HttpStatus.NO_CONTENT)
+    void grantBatch(@PathVariable UUID busId, @Valid @RequestBody PermissionBatchInput input) {
+        service.grantBatch(busId, input.employeeIds());
     }
-
-    @PutMapping("/buses/{busId}/permissions/{employeeId}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    void grant(@PathVariable UUID busId, @PathVariable UUID employeeId) {
-        service.grant(busId, employeeId);
-    }
-
-    @DeleteMapping("/buses/{busId}/permissions/{employeeId}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    void revoke(@PathVariable UUID busId, @PathVariable UUID employeeId) {
-        service.revoke(busId, employeeId);
-    }
+    @DeleteMapping("/buses/{busId}/permissions/{employeeId}") @ResponseStatus(HttpStatus.NO_CONTENT)
+    void revoke(@PathVariable UUID busId, @PathVariable UUID employeeId) { service.revoke(busId, employeeId); }
 
     @GetMapping("/buses/{busId}/gps-points")
-    RouteHistory route(
-            @PathVariable UUID busId,
+    RouteHistory route(@PathVariable UUID busId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to) {
         return new RouteHistory(busId, from, to, service.route(busId, from, to));
     }
-
     @GetMapping("/buses/{busId}/boarding-events")
-    List<BoardingEventView> boardingEvents(
-            @PathVariable UUID busId,
+    List<BoardingEventView> boardingEvents(@PathVariable UUID busId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to) {
         return service.boardingEvents(busId, from, to);
     }
 
-    public record BusInput(
-            @NotBlank @Size(max = 50) String code,
+    public record BusInput(@NotBlank @Size(max = 50) String code,
             @NotBlank @Size(max = 100) String name,
-            @NotBlank @Size(max = 100) String hardwareSerial,
-            boolean active) {}
-
-    public record BusView(
-            UUID id,
-            String code,
-            String name,
-            String hardwareSerial,
-            boolean active,
-            long permissionVersion) {}
-
-    public record DeviceInput(
-            @NotBlank @Size(max = 100) String deviceCode,
-            @NotBlank @Size(max = 100) String hardwareSerial,
-            @NotNull UUID busId,
-            boolean active) {}
-
-    public record DeviceView(
-            UUID id,
-            String deviceCode,
-            String hardwareSerial,
-            UUID busId,
-            String busCode,
-            boolean active,
-            Instant lastSeenAt) {}
-
-    public record EmployeeInput(
-            @NotBlank @Size(max = 50) String employeeNo,
+            @NotBlank @Size(max = 100) String hardwareSerial, boolean active) {}
+    public record BusUpdateInput(@NotBlank @Size(max = 50) String code,
+            @NotBlank @Size(max = 100) String name, boolean active, boolean clearPermissions) {}
+    public record BusView(UUID id, String code, String name, String hardwareSerial,
+            boolean active, long permissionVersion, long permissionCount) {}
+    public record DeviceInput(@NotBlank @Size(max = 100) String deviceCode,
+            @NotBlank @Size(max = 100) String hardwareSerial, @NotNull UUID busId, boolean active) {}
+    public record DeviceView(UUID id, String deviceCode, String hardwareSerial, UUID busId,
+            String busCode, boolean active, Instant lastSeenAt) {}
+    public record DeviceAssignmentView(UUID id, UUID deviceId, UUID busId, String busCode,
+            String busName, Instant installedAt, Instant removedAt) {}
+    public record EmployeeInput(@NotBlank @Size(max = 50) String employeeNo,
             @NotBlank @Size(max = 100) String name,
-            @NotBlank @Size(max = 100) String cardSn,
-            boolean active) {}
-
-    public record EmployeeView(
-            UUID id,
-            String employeeNo,
-            String name,
-            String cardSn,
-            boolean active) {}
-
-    public record RouteHistory(
-            UUID busId,
-            Instant from,
-            Instant to,
-            List<TrackingStore.RoutePoint> points) {}
-
-    public record BoardingEventView(
-            UUID id,
-            UUID employeeId,
-            String cardSn,
-            BoardingResult result,
-            Instant scannedAt,
-            Long permissionVersion) {}
+            @NotBlank @Size(max = 100) String cardSn, boolean active) {}
+    public record EmployeeView(UUID id, String employeeNo, String name, String cardSn, boolean active) {}
+    public record PermissionBatchInput(@NotNull @Size(min = 1, max = 100) List<@NotNull UUID> employeeIds) {}
+    public record RouteHistory(UUID busId, Instant from, Instant to, List<TrackingStore.RoutePoint> points) {}
+    public record BoardingEventView(UUID id, UUID employeeId, String cardSn, BoardingResult result,
+            Instant scannedAt, Long permissionVersion) {}
 }
