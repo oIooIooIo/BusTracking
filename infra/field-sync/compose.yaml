@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bus_tracking}
+      POSTGRES_USER: ${POSTGRES_USER:-bus_tracking}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bus_tracking}
+    volumes:
+      - field-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - field-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  backend:
+    build:
+      context: ../../services/backend
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-bus_tracking}
+      DB_USERNAME: ${POSTGRES_USER:-bus_tracking}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-bus_tracking}
+      REDIS_HOST: redis
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me}
+      DEVICE_API_KEY: ${DEVICE_API_KEY:-change-me}
+      ADMIN_WEB_ORIGIN: http://localhost
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  field-postgres:
+  field-redis:
