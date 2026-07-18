@@ -19,6 +19,7 @@ class CardLanReader(
     companion object {
         private const val TAG = "CardLanReader"
         private const val POLL_INTERVAL_MS = 250L
+        private const val INIT_RETRY_INTERVAL_MS = 2_000L
         private const val CARD_BUFFER_SIZE = 32
         private const val NO_CARD_RESULT = 1
         private val INIT_SUCCESS_RESULTS = setOf(0, -2, -3, -4)
@@ -45,39 +46,51 @@ class CardLanReader(
     }
 
     private fun readLoop() {
-        try {
-            val reader = CardLanStandardBus()
-            val initResult = reader.callInitDev()
-            check(initResult in INIT_SUCCESS_RESULTS) {
-                "618K initialization failed ($initResult)"
-            }
-            Log.i(TAG, "618K initialized with result $initResult")
-            onStateChanged(State.Ready)
-
-            var lastCardSn: String? = null
-            while (running.get()) {
-                val cardBytes = ByteArray(CARD_BUFFER_SIZE)
-                val cardResult = reader.callCardReset(cardBytes)
-                if (cardResult == NO_CARD_RESULT) {
-                    lastCardSn = null
-                } else if (cardResult in CARD_SUCCESS_RESULTS) {
-                    val cardSn = cardBytes.toCardSn()
-                    if (cardSn != null && cardSn != lastCardSn) {
-                        Log.i(TAG, "618K card result=$cardResult CardSN=$cardSn")
-                        lastCardSn = cardSn
-                        onCardDetected(cardSn)
-                    }
-                } else {
-                    Log.w(TAG, "618K card reset returned $cardResult")
+        while (running.get()) {
+            try {
+                val reader = CardLanStandardBus()
+                val initResult = reader.callInitDev()
+                check(initResult in INIT_SUCCESS_RESULTS) {
+                    "618K initialization failed ($initResult)"
                 }
-                Thread.sleep(POLL_INTERVAL_MS)
+                Log.i(TAG, "618K initialized with result $initResult")
+                onStateChanged(State.Ready)
+
+                var lastCardSn: String? = null
+                while (running.get()) {
+                    val cardBytes = ByteArray(CARD_BUFFER_SIZE)
+                    val cardResult = reader.callCardReset(cardBytes)
+                    if (cardResult == NO_CARD_RESULT) {
+                        lastCardSn = null
+                    } else if (cardResult in CARD_SUCCESS_RESULTS) {
+                        val cardSn = cardBytes.toCardSn()
+                        if (cardSn != null && cardSn != lastCardSn) {
+                            Log.i(TAG, "618K card result=$cardResult CardSN=$cardSn")
+                            lastCardSn = cardSn
+                            onCardDetected(cardSn)
+                        }
+                    } else {
+                        Log.w(TAG, "618K card reset returned $cardResult")
+                    }
+                    Thread.sleep(POLL_INTERVAL_MS)
+                }
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return
+            } catch (exception: Throwable) {
+                val message = exception.message ?: exception.javaClass.simpleName
+                Log.e(TAG, "CardLan reader failed; retrying in ${INIT_RETRY_INTERVAL_MS}ms", exception)
+                onStateChanged(State.Error(message))
+                sleepBeforeRetry()
             }
+        }
+    }
+
+    private fun sleepBeforeRetry() {
+        try {
+            Thread.sleep(INIT_RETRY_INTERVAL_MS)
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
-        } catch (exception: Throwable) {
-            Log.e(TAG, "CardLan reader failed", exception)
-            onStateChanged(State.Error(exception.message ?: exception.javaClass.simpleName))
-        } finally {
             running.set(false)
         }
     }
