@@ -34,6 +34,12 @@ public class DeviceApi {
         return service.permissionSnapshot(device(request));
     }
 
+    @PostMapping("/configuration-ack")
+    void acknowledgeConfiguration(HttpServletRequest request,
+            @Valid @RequestBody ConfigurationAck body) {
+        service.acknowledgeConfiguration(device(request), body.version());
+    }
+
     @PostMapping("/gps-points/batch")
     UploadGpsResult uploadGps(
             HttpServletRequest request,
@@ -56,11 +62,18 @@ public class DeviceApi {
             long version,
             Instant generatedAt,
             PermissionBus bus,
-            List<PermissionEmployee> employees) {}
+            List<PermissionRoute> routes,
+            List<PermissionEmployee> employees,
+            List<PermissionStop> stops) {}
 
     public record PermissionBus(UUID id, String code, String name) {}
 
-    public record PermissionEmployee(UUID id, String employeeNo, String name, String cardSn) {}
+    public record PermissionRoute(UUID id, String code, String name) {}
+    public record PermissionEmployee(UUID id, String employeeNo, String name, String department,
+            String cardSn, List<UUID> routeIds) {}
+    public record PermissionStop(UUID id, String code, String name, double latitude,
+            double longitude, float radiusMeters, int order) {}
+    public record ConfigurationAck(@Positive long version) {}
 
     public record GpsBatch(
             @NotEmpty @Size(max = 500) List<@Valid GpsPointInput> points) {}
@@ -87,7 +100,17 @@ public class DeviceApi {
             UUID employeeId,
             @NotNull BoardingResult result,
             @NotNull Instant scannedAt,
-            Long permissionVersion) {}
+            Long permissionVersion,
+            @Size(max = 20) String eventType,
+            @Size(max = 50) String employeeNo,
+            @Size(max = 100) String employeeName,
+            @Size(max = 100) String employeeDepartment,
+            Double latitude,
+            Double longitude,
+            Instant locationRecordedAt,
+            @Size(max = 20) String locationSource,
+            Float accuracyMeters,
+            List<UUID> routeIds) {}
 
     public record UploadEventResult(
             List<UUID> acceptedIds,

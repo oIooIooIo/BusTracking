@@ -3,20 +3,19 @@ package com.company.bustracking.service;
 import com.company.bustracking.api.DeviceApi.BoardingEventInput;
 import com.company.bustracking.api.DeviceApi.GpsPointInput;
 import com.company.bustracking.api.DeviceApi.PermissionEmployee;
+import com.company.bustracking.api.DeviceApi.PermissionRoute;
+import com.company.bustracking.api.DeviceApi.PermissionStop;
 import com.company.bustracking.api.DeviceApi.PermissionSnapshot;
 import com.company.bustracking.api.DeviceApi.RejectedEvent;
 import com.company.bustracking.api.DeviceApi.RejectedGpsPoint;
 import com.company.bustracking.api.DeviceApi.UploadEventResult;
 import com.company.bustracking.api.DeviceApi.UploadGpsResult;
 import com.company.bustracking.domain.BoardingEvent;
-import com.company.bustracking.domain.BusEmployeePermission;
 import com.company.bustracking.domain.Device;
 import com.company.bustracking.domain.Employee;
 import com.company.bustracking.repository.BoardingEventRepository;
 import com.company.bustracking.repository.DeviceRepository;
 import com.company.bustracking.repository.EmployeeRepository;
-import com.company.bustracking.repository.PermissionRepository;
-import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,47 +26,47 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class DeviceService {
-    private final PermissionRepository permissions;
     private final EmployeeRepository employees;
     private final BoardingEventRepository events;
     private final DeviceRepository devices;
     private final TrackingStore tracking;
+    private final RouteService routes;
 
     public DeviceService(
-            PermissionRepository permissions,
             EmployeeRepository employees,
             BoardingEventRepository events,
             DeviceRepository devices,
-            TrackingStore tracking) {
-        this.permissions = permissions;
+            TrackingStore tracking,
+            RouteService routes) {
         this.employees = employees;
         this.events = events;
         this.devices = devices;
         this.tracking = tracking;
+        this.routes = routes;
     }
 
     @Transactional
     public PermissionSnapshot permissionSnapshot(Device device) {
         touch(device);
-        List<PermissionEmployee> result = permissions
-                .findByBus_IdAndEmployee_ActiveTrueOrderByEmployee_EmployeeNo(
-                        device.getBus().getId())
-                .stream()
-                .map(BusEmployeePermission::getEmployee)
-                .map(employee -> new PermissionEmployee(
-                        employee.getId(),
-                        employee.getEmployeeNo(),
-                        employee.getName(),
-                        employee.getCardSn()))
-                .toList();
+        RouteService.DeviceConfiguration config = routes.configuration(device);
         return new PermissionSnapshot(
-                device.getBus().getPermissionVersion(),
-                Instant.now(),
+                config.version(), Instant.now(),
                 new com.company.bustracking.api.DeviceApi.PermissionBus(
-                        device.getBus().getId(),
-                        device.getBus().getCode(),
-                        device.getBus().getName()),
-                result);
+                        device.getBus().getId(), device.getBus().getCode(), device.getBus().getName()),
+                config.routes().stream().map(route -> new PermissionRoute(
+                        route.id(), route.code(), route.name())).toList(),
+                config.employees().stream().map(employee -> new PermissionEmployee(
+                        employee.id(), employee.employeeNo(), employee.name(), employee.department(),
+                        employee.cardSn(), employee.routeIds())).toList(),
+                config.stops().stream().map(stop -> new PermissionStop(
+                        stop.id(), stop.code(), stop.name(), stop.latitude(), stop.longitude(),
+                        stop.radiusMeters(), stop.order())).toList());
+    }
+
+    @Transactional
+    public void acknowledgeConfiguration(Device device, long version) {
+        touch(device);
+        routes.acknowledge(device, version);
     }
 
     @Transactional
@@ -117,15 +116,26 @@ public class DeviceService {
                     continue;
                 }
             }
-            events.save(new BoardingEvent(
-                    input.id(),
-                    device.getBus(),
-                    device,
-                    employee,
-                    input.cardSn().trim(),
-                    input.result(),
-                    input.scannedAt(),
-                    input.permissionVersion()));
+            if (!validEventLocation(input)) {
+                rejected.add(new RejectedEvent(input.id(), "INVALID_LOCATION", false));
+                continue;
+            }
+            List<UUID> matchedRoutes = input.routeIds() == null || input.routeIds().isEmpty()
+                    ? routes.matchingRoutes(device.getBus().getId(), input.employeeId())
+                    : input.routeIds();
+            UUID stopId = routes.nearestStop(matchedRoutes, input.latitude(), input.longitude(),
+                    input.accuracyMeters(), input.scannedAt(), input.locationRecordedAt());
+            String eventType = input.eventType() == null ? "BOARDING" : input.eventType();
+            String locationSource = input.locationSource() == null ? "UNAVAILABLE" : input.locationSource();
+            BoardingEvent saved = events.saveAndFlush(new BoardingEvent(
+                    input.id(), device.getBus(), device, employee, input.cardSn().trim(),
+                    input.result(), input.scannedAt(), input.permissionVersion(), eventType,
+                    input.employeeNo() != null ? input.employeeNo() : employee == null ? null : employee.getEmployeeNo(),
+                    input.employeeName() != null ? input.employeeName() : employee == null ? null : employee.getName(),
+                    input.employeeDepartment() != null ? input.employeeDepartment() : employee == null ? null : employee.getDepartment(),
+                    input.latitude(), input.longitude(), input.locationRecordedAt(), locationSource,
+                    input.accuracyMeters(), stopId));
+            routes.linkEventRoutes(saved.getId(), matchedRoutes);
             accepted.add(input.id());
         }
         return new UploadEventResult(accepted, rejected);
@@ -148,6 +158,14 @@ public class DeviceService {
                     || (Float.isFinite(point.accuracyMeters()) && point.accuracyMeters() >= 0));
     }
 
+    private boolean validEventLocation(BoardingEventInput input) {
+        if (input.latitude() == null && input.longitude() == null) return true;
+        return input.latitude() != null && input.longitude() != null
+                && Double.isFinite(input.latitude()) && input.latitude() >= -90 && input.latitude() <= 90
+                && Double.isFinite(input.longitude()) && input.longitude() >= -180 && input.longitude() <= 180
+                && (input.accuracyMeters() == null || Float.isFinite(input.accuracyMeters()) && input.accuracyMeters() >= 0);
+    }
+
     private boolean same(BoardingEvent event, Device device, BoardingEventInput input) {
         return event.getDeviceId().equals(device.getId())
                 && event.getBusId().equals(device.getBus().getId())
@@ -155,6 +173,10 @@ public class DeviceService {
                 && event.getCardSn().equals(input.cardSn().trim())
                 && event.getResult() == input.result()
                 && event.getScannedAt().equals(input.scannedAt())
-                && Objects.equals(event.getPermissionVersion(), input.permissionVersion());
+                && Objects.equals(event.getPermissionVersion(), input.permissionVersion())
+                && Objects.equals(event.getLatitude(), input.latitude())
+                && Objects.equals(event.getLongitude(), input.longitude())
+                && Objects.equals(event.getLocationRecordedAt(), input.locationRecordedAt())
+                && Objects.equals(event.getAccuracyMeters(), input.accuracyMeters());
     }
 }

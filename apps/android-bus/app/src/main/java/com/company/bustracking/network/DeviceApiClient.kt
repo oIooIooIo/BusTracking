@@ -17,12 +17,17 @@ class DeviceApiClient {
     fun permissionSnapshot(): LocalStore.PermissionSnapshotData {
         val json = request("permissions", "GET")
         val bus = json.getJSONObject("bus")
+        val routes = json.getJSONArray("routes")
         val employees = json.getJSONArray("employees")
         return LocalStore.PermissionSnapshotData(
             version = json.getLong("version"),
             busId = bus.getString("id"),
             busCode = bus.getString("code"),
             busName = bus.getString("name"),
+            routes = List(routes.length()) { index ->
+                val route = routes.getJSONObject(index)
+                LocalStore.RouteData(route.getString("id"), route.getString("code"), route.getString("name"))
+            },
             employees = List(employees.length()) { index ->
                 val employee = employees.getJSONObject(index)
                 PermissionEntity(
@@ -30,9 +35,15 @@ class DeviceApiClient {
                     employeeId = employee.getString("id"),
                     employeeNo = employee.getString("employeeNo"),
                     employeeName = employee.getString("name"),
+                    department = employee.getString("department"),
+                    routeIds = employee.getJSONArray("routeIds").stringValues().joinToString(","),
                 )
             },
         )
+    }
+
+    fun acknowledgeConfiguration(version: Long) {
+        request("configuration-ack", "POST", JSONObject().put("version", version))
     }
 
     fun uploadGps(points: List<PendingGpsEntity>): GpsUploadResponse {
@@ -74,7 +85,17 @@ class DeviceApiClient {
                     .put("employeeId", event.employeeId ?: JSONObject.NULL)
                     .put("result", event.result)
                     .put("scannedAt", Instant.ofEpochMilli(event.scannedAt).toString())
-                    .put("permissionVersion", event.permissionVersion ?: JSONObject.NULL),
+                    .put("permissionVersion", event.permissionVersion ?: JSONObject.NULL)
+                    .put("eventType", event.eventType)
+                    .put("employeeNo", event.employeeNoSnapshot ?: JSONObject.NULL)
+                    .put("employeeName", event.employeeNameSnapshot ?: JSONObject.NULL)
+                    .put("employeeDepartment", event.employeeDepartmentSnapshot ?: JSONObject.NULL)
+                    .put("latitude", event.latitude ?: JSONObject.NULL)
+                    .put("longitude", event.longitude ?: JSONObject.NULL)
+                    .put("locationRecordedAt", event.locationRecordedAt?.let { Instant.ofEpochMilli(it).toString() } ?: JSONObject.NULL)
+                    .put("locationSource", event.locationSource)
+                    .put("accuracyMeters", event.accuracyMeters ?: JSONObject.NULL)
+                    .put("routeIds", JSONArray(event.routeIds.split(',').filter(String::isNotBlank))),
             )
         }
         val json = request(

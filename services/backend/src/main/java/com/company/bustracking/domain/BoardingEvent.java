@@ -43,6 +43,25 @@ public class BoardingEvent {
     @Column(name = "permission_version")
     private Long permissionVersion;
 
+    @Column(name = "event_type", nullable = false)
+    private String eventType;
+    @Column(name = "employee_no_snapshot")
+    private String employeeNoSnapshot;
+    @Column(name = "employee_name_snapshot")
+    private String employeeNameSnapshot;
+    @Column(name = "employee_department_snapshot")
+    private String employeeDepartmentSnapshot;
+    private Double latitude;
+    private Double longitude;
+    @Column(name = "location_recorded_at")
+    private Instant locationRecordedAt;
+    @Column(name = "location_source", nullable = false)
+    private String locationSource;
+    @Column(name = "accuracy_meters")
+    private Float accuracyMeters;
+    @Column(name = "stop_id")
+    private UUID stopId;
+
     @Column(name = "received_at", nullable = false)
     private Instant receivedAt;
 
@@ -56,7 +75,17 @@ public class BoardingEvent {
             String cardSn,
             BoardingResult result,
             Instant scannedAt,
-            Long permissionVersion) {
+            Long permissionVersion,
+            String eventType,
+            String employeeNoSnapshot,
+            String employeeNameSnapshot,
+            String employeeDepartmentSnapshot,
+            Double latitude,
+            Double longitude,
+            Instant locationRecordedAt,
+            String locationSource,
+            Float accuracyMeters,
+            UUID stopId) {
         this.id = id;
         this.bus = bus;
         this.device = device;
@@ -65,6 +94,16 @@ public class BoardingEvent {
         this.result = result;
         this.scannedAt = scannedAt;
         this.permissionVersion = permissionVersion;
+        this.eventType = eventType;
+        this.employeeNoSnapshot = employeeNoSnapshot;
+        this.employeeNameSnapshot = employeeNameSnapshot;
+        this.employeeDepartmentSnapshot = employeeDepartmentSnapshot;
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.locationRecordedAt = locationRecordedAt;
+        this.locationSource = locationSource;
+        this.accuracyMeters = accuracyMeters;
+        this.stopId = stopId;
         this.receivedAt = Instant.now();
     }
 
@@ -76,4 +115,14 @@ public class BoardingEvent {
     public BoardingResult getResult() { return result; }
     public Instant getScannedAt() { return scannedAt; }
     public Long getPermissionVersion() { return permissionVersion; }
+    public String getEventType() { return eventType; }
+    public String getEmployeeNoSnapshot() { return employeeNoSnapshot; }
+    public String getEmployeeNameSnapshot() { return employeeNameSnapshot; }
+    public String getEmployeeDepartmentSnapshot() { return employeeDepartmentSnapshot; }
+    public Double getLatitude() { return latitude; }
+    public Double getLongitude() { return longitude; }
+    public Instant getLocationRecordedAt() { return locationRecordedAt; }
+    public String getLocationSource() { return locationSource; }
+    public Float getAccuracyMeters() { return accuracyMeters; }
+    public UUID getStopId() { return stopId; }
 }

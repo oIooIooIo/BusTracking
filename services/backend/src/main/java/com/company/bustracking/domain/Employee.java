@@ -19,6 +19,9 @@ public class Employee {
     @Column(nullable = false, length = 100)
     private String name;
 
+    @Column(nullable = false, length = 100)
+    private String department;
+
     @Column(name = "card_sn", nullable = false, unique = true, length = 100)
     private String cardSn;
 
@@ -33,19 +36,21 @@ public class Employee {
 
     protected Employee() {}
 
-    public Employee(String employeeNo, String name, String cardSn, boolean active) {
+    public Employee(String employeeNo, String name, String department, String cardSn, boolean active) {
         this.id = UUID.randomUUID();
         this.employeeNo = employeeNo;
         this.name = name;
+        this.department = department;
         this.cardSn = cardSn;
         this.active = active;
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
     }
 
-    public void update(String employeeNo, String name, String cardSn, boolean active) {
+    public void update(String employeeNo, String name, String department, String cardSn, boolean active) {
         this.employeeNo = employeeNo;
         this.name = name;
+        this.department = department;
         this.cardSn = cardSn;
         this.active = active;
         this.updatedAt = Instant.now();
@@ -54,6 +59,7 @@ public class Employee {
     public UUID getId() { return id; }
     public String getEmployeeNo() { return employeeNo; }
     public String getName() { return name; }
+    public String getDepartment() { return department; }
     public String getCardSn() { return cardSn; }
     public boolean isActive() { return active; }
 }

@@ -42,10 +42,11 @@ public class AdminService {
     private final PermissionRepository permissions;
     private final BoardingEventRepository events;
     private final TrackingStore tracking;
+    private final RouteService routes;
 
     public AdminService(BusRepository buses, EmployeeRepository employees, DeviceRepository devices,
             DeviceAssignmentHistoryRepository assignmentHistory, PermissionRepository permissions,
-            BoardingEventRepository events, TrackingStore tracking) {
+            BoardingEventRepository events, TrackingStore tracking, RouteService routes) {
         this.buses = buses;
         this.employees = employees;
         this.devices = devices;
@@ -53,6 +54,7 @@ public class AdminService {
         this.permissions = permissions;
         this.events = events;
         this.tracking = tracking;
+        this.routes = routes;
     }
 
     @Transactional(readOnly = true)
@@ -133,7 +135,7 @@ public class AdminService {
     @Transactional
     public EmployeeView createEmployee(EmployeeInput input) {
         validateEmployeeIdentity(null, input.employeeNo(), input.cardSn());
-        return toView(employees.save(new Employee(input.employeeNo().trim(), input.name().trim(),
+        return toView(employees.save(new Employee(input.employeeNo().trim(), input.name().trim(), input.department().trim(),
                 input.cardSn().trim(), input.active())));
     }
 
@@ -143,13 +145,15 @@ public class AdminService {
         validateEmployeeIdentity(id, input.employeeNo(), input.cardSn());
         boolean snapshotChanged = !employee.getEmployeeNo().equals(input.employeeNo().trim())
                 || !employee.getName().equals(input.name().trim())
+                || !employee.getDepartment().equals(input.department().trim())
                 || !employee.getCardSn().equals(input.cardSn().trim())
                 || employee.isActive() != input.active();
-        employee.update(input.employeeNo().trim(), input.name().trim(), input.cardSn().trim(), input.active());
+        employee.update(input.employeeNo().trim(), input.name().trim(), input.department().trim(), input.cardSn().trim(), input.active());
         employees.save(employee);
         if (snapshotChanged) {
             permissions.findByEmployee_Id(id).stream().map(BusEmployeePermission::getBus)
                     .forEach(Bus::incrementPermissionVersion);
+            routes.bumpForEmployee(id);
         }
         return toView(employee);
     }
@@ -198,11 +202,15 @@ public class AdminService {
         bus(busId); validateRange(from, to); return tracking.route(busId, from, to);
     }
 
+    public double dailyMileageKm(List<TrackingStore.RoutePoint> points) {
+        return tracking.mileageMeters(points) / 1000.0;
+    }
+
     @Transactional(readOnly = true)
     public List<BoardingEventView> boardingEvents(UUID busId, Instant from, Instant to) {
         bus(busId); validateRange(from, to);
         return events.findTop1000ByBus_IdAndScannedAtBetweenOrderByScannedAtDesc(busId, from, to)
-                .stream().map(AdminService::toView).toList();
+                .stream().map(this::toEventView).toList();
     }
 
     private void validateBusIdentity(UUID id, String code) {
@@ -253,8 +261,11 @@ public class AdminService {
 
     private BusView toBusView(Bus bus) {
         String serial = devices.findFirstByBus_IdOrderByActiveDesc(bus.getId()).map(Device::getHardwareSerial).orElse(null);
+        RouteService.SyncView sync = routes.sync(bus.getId());
         return new BusView(bus.getId(), bus.getCode(), bus.getName(), serial, bus.isActive(),
-                bus.getPermissionVersion(), permissions.countByBus_Id(bus.getId()));
+                bus.getPermissionVersion(), permissions.countByBus_Id(bus.getId()),
+                routes.routeSummaries(bus.getId()), sync.desiredVersion(), sync.appliedVersion(),
+                sync.synced(), sync.appliedAt());
     }
     private static DeviceView toView(Device device) {
         return new DeviceView(device.getId(), device.getDeviceCode(), device.getHardwareSerial(),
@@ -266,11 +277,17 @@ public class AdminService {
     }
     private static EmployeeView toView(Employee employee) {
         return new EmployeeView(employee.getId(), employee.getEmployeeNo(), employee.getName(),
-                employee.getCardSn(), employee.isActive());
+                employee.getDepartment(), employee.getCardSn(), employee.isActive());
     }
-    private static BoardingEventView toView(BoardingEvent event) {
-        return new BoardingEventView(event.getId(), event.getEmployeeId(), event.getCardSn(),
-                event.getResult(), event.getScannedAt(), event.getPermissionVersion());
+    private BoardingEventView toEventView(BoardingEvent event) {
+        return new BoardingEventView(event.getId(), event.getEmployeeId(),
+                event.getEmployeeNoSnapshot(), event.getEmployeeNameSnapshot(),
+                event.getEmployeeDepartmentSnapshot(), event.getCardSn(), event.getResult(),
+                event.getEventType(), event.getScannedAt(), event.getPermissionVersion(),
+                event.getBusId(), event.getDeviceId(), routes.eventRoutes(event.getId()),
+                event.getStopId(), routes.stopName(event.getStopId()), event.getLatitude(),
+                event.getLongitude(), event.getLocationRecordedAt(), event.getLocationSource(),
+                event.getAccuracyMeters());
     }
     private static String normalizeHardwareSerial(String value) {
         return value.trim().toUpperCase(java.util.Locale.ROOT);

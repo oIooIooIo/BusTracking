@@ -25,31 +25,47 @@ class LocalStore(private val database: BusDatabase) {
 
     suspend fun checkCard(cardSn: String): CardDecision {
         val state = database.deviceState().get()
-        if (state?.permissionVersion == null) {
+        if (state?.permissionVersion == null || state.routeIds.isBlank()) {
             return CardDecision(
                 result = "AUTH_DATA_NOT_READY",
                 employee = null,
                 permissionVersion = null,
+                routeIds = "",
             )
         }
         val employee = database.permissions().find(cardSn)
         return if (employee == null) {
-            CardDecision("DENIED_NO_PERMISSION", null, state.permissionVersion)
+            CardDecision("DENIED_NO_PERMISSION", null, state.permissionVersion, state.routeIds)
         } else {
-            CardDecision("ALLOWED", employee, state.permissionVersion)
+            CardDecision("ALLOWED", employee, state.permissionVersion, employee.routeIds)
         }
     }
 
-    suspend fun recordBoarding(cardSn: String, decision: CardDecision): String {
+    suspend fun recordBoarding(
+        cardSn: String,
+        decision: CardDecision,
+        scannedAt: Long,
+        capture: com.company.bustracking.tracking.ScanLocationProvider.Capture,
+    ): String {
         val id = UUID.randomUUID().toString()
+        val location = capture.location
         database.boardingEvents().insert(
             PendingBoardingEventEntity(
                 id = id,
                 cardSn = cardSn,
                 employeeId = decision.employee?.employeeId,
                 result = decision.result,
-                scannedAt = System.currentTimeMillis(),
+                scannedAt = scannedAt,
                 permissionVersion = decision.permissionVersion,
+                employeeNoSnapshot = decision.employee?.employeeNo,
+                employeeNameSnapshot = decision.employee?.employeeName,
+                employeeDepartmentSnapshot = decision.employee?.department,
+                latitude = location?.latitude,
+                longitude = location?.longitude,
+                locationRecordedAt = location?.time,
+                locationSource = capture.source,
+                accuracyMeters = location?.takeIf { it.hasAccuracy() }?.accuracy,
+                routeIds = decision.routeIds,
             ),
         )
         return id
@@ -66,6 +82,8 @@ class LocalStore(private val database: BusDatabase) {
                     busId = snapshot.busId,
                     busCode = snapshot.busCode,
                     busName = snapshot.busName,
+                    routeIds = snapshot.routes.joinToString(",") { it.id },
+                    routeNames = snapshot.routes.joinToString(", ") { it.name },
                     permissionSyncedAt = System.currentTimeMillis(),
                 ),
             )
@@ -90,6 +108,7 @@ class LocalStore(private val database: BusDatabase) {
         val result: String,
         val employee: PermissionEntity?,
         val permissionVersion: Long?,
+        val routeIds: String,
     )
 
     data class PermissionSnapshotData(
@@ -97,8 +116,11 @@ class LocalStore(private val database: BusDatabase) {
         val busId: String,
         val busCode: String,
         val busName: String,
+        val routes: List<RouteData>,
         val employees: List<PermissionEntity>,
     )
+
+    data class RouteData(val id: String, val code: String, val name: String)
 
     companion object {
         private const val THIRTY_DAYS_MS = 30L * 24 * 60 * 60 * 1000
