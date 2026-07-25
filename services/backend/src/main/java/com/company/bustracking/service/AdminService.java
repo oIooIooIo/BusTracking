@@ -5,7 +5,8 @@ import com.company.bustracking.api.AdminApi.BusInput;
 import com.company.bustracking.api.AdminApi.BusUpdateInput;
 import com.company.bustracking.api.AdminApi.BusView;
 import com.company.bustracking.api.AdminApi.DeviceAssignmentView;
-import com.company.bustracking.api.AdminApi.DeviceInput;
+import com.company.bustracking.api.AdminApi.DeviceCreateInput;
+import com.company.bustracking.api.AdminApi.DeviceUpdateInput;
 import com.company.bustracking.api.AdminApi.DeviceView;
 import com.company.bustracking.api.AdminApi.EmployeeInput;
 import com.company.bustracking.api.AdminApi.EmployeeView;
@@ -28,6 +29,7 @@ import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,10 +45,11 @@ public class AdminService {
     private final BoardingEventRepository events;
     private final TrackingStore tracking;
     private final RouteService routes;
+    private final JdbcTemplate jdbc;
 
     public AdminService(BusRepository buses, EmployeeRepository employees, DeviceRepository devices,
             DeviceAssignmentHistoryRepository assignmentHistory, PermissionRepository permissions,
-            BoardingEventRepository events, TrackingStore tracking, RouteService routes) {
+            BoardingEventRepository events, TrackingStore tracking, RouteService routes, JdbcTemplate jdbc) {
         this.buses = buses;
         this.employees = employees;
         this.devices = devices;
@@ -55,6 +58,7 @@ public class AdminService {
         this.events = events;
         this.tracking = tracking;
         this.routes = routes;
+        this.jdbc = jdbc;
     }
 
     @Transactional(readOnly = true)
@@ -64,7 +68,7 @@ public class AdminService {
     public BusView createBus(BusInput input) {
         validateBusIdentity(null, input.code());
         Bus bus = buses.save(new Bus(input.code().trim(), input.name().trim(), input.active()));
-        Device device = devices.save(new Device(bus.getCode() + "-DEVICE",
+        Device device = devices.save(new Device(nextDeviceCode(),
                 normalizeHardwareSerial(input.hardwareSerial()), bus, input.active()));
         assignmentHistory.save(new DeviceAssignmentHistory(device, bus, Instant.now()));
         return toBusView(bus);
@@ -89,20 +93,20 @@ public class AdminService {
     public List<DeviceView> devices() { return devices.findAll().stream().map(AdminService::toView).toList(); }
 
     @Transactional
-    public DeviceView createDevice(DeviceInput input) {
-        validateDeviceIdentity(null, input.deviceCode(), input.hardwareSerial());
+    public DeviceView createDevice(DeviceCreateInput input) {
+        validateDeviceHardwareSerial(null, input.hardwareSerial());
         Bus bus = activeBus(input.busId());
         validateActiveDevice(null, bus, input.active());
-        Device device = devices.save(new Device(input.deviceCode().trim(),
+        Device device = devices.save(new Device(nextDeviceCode(),
                 normalizeHardwareSerial(input.hardwareSerial()), bus, input.active()));
         assignmentHistory.save(new DeviceAssignmentHistory(device, bus, Instant.now()));
         return toView(device);
     }
 
     @Transactional
-    public DeviceView updateDevice(UUID id, DeviceInput input) {
+    public DeviceView updateDevice(UUID id, DeviceUpdateInput input) {
         Device device = device(id);
-        validateDeviceIdentity(id, input.deviceCode(), input.hardwareSerial());
+        validateDeviceHardwareSerial(id, input.hardwareSerial());
         Bus targetBus = activeBus(input.busId());
         validateActiveDevice(id, targetBus, input.active());
         boolean reassigned = !device.getBus().getId().equals(targetBus.getId());
@@ -112,8 +116,7 @@ public class AdminService {
             assignmentHistory.flush();
             assignmentHistory.save(new DeviceAssignmentHistory(device, targetBus, now));
         }
-        device.update(input.deviceCode().trim(), normalizeHardwareSerial(input.hardwareSerial()),
-                targetBus, input.active());
+        device.update(normalizeHardwareSerial(input.hardwareSerial()), targetBus, input.active());
         return toView(devices.save(device));
     }
 
@@ -219,12 +222,15 @@ public class AdminService {
         if (exists) throw new IllegalArgumentException("Bus code already exists");
     }
 
-    private void validateDeviceIdentity(UUID id, String deviceCode, String hardwareSerial) {
-        String code = deviceCode.trim();
+    private String nextDeviceCode() {
+        long sequence = jdbc.queryForObject("SELECT nextval('device_code_seq')", Long.class);
+        return "DEVICE-%06d".formatted(sequence);
+    }
+
+    private void validateDeviceHardwareSerial(UUID id, String hardwareSerial) {
         String serial = normalizeHardwareSerial(hardwareSerial);
-        boolean codeExists = id == null ? devices.existsByDeviceCodeIgnoreCase(code) : devices.existsByDeviceCodeIgnoreCaseAndIdNot(code, id);
-        boolean serialExists = id == null ? devices.existsByHardwareSerialIgnoreCase(serial) : devices.existsByHardwareSerialIgnoreCaseAndIdNot(serial, id);
-        if (codeExists) throw new IllegalArgumentException("Device code already exists");
+        boolean serialExists = id == null ? devices.existsByHardwareSerialIgnoreCase(serial)
+                : devices.existsByHardwareSerialIgnoreCaseAndIdNot(serial, id);
         if (serialExists) throw new IllegalArgumentException("Hardware serial already exists");
     }
 

@@ -72,13 +72,28 @@ function BusPanel({ client, buses, routes, reload }: { client: Client; buses: Bu
 
 function BusRouteAssignment({ client, bus, routes, reload }: { client: Client; bus: Bus; routes: Route[]; reload: () => Promise<void> }) {
   const [saving, setSaving] = useState(false)
+  const assignedIds = bus.routes.map(route => route.id)
   const save = async (routeIds: string[]) => {
     setSaving(true)
     try { await client.assignRoutes(bus.id, routeIds); await reload(); message.success('Bus routes updated') }
     catch (cause) { message.error(cause instanceof Error ? cause.message : 'Unable to update routes') }
     finally { setSaving(false) }
   }
-  return <Select mode="multiple" loading={saving} value={bus.routes.map(route => route.id)} onChange={save} style={{ minWidth: 240 }} options={routes.filter(route => route.active).map(route => ({ value: route.id, label: route.code + ' - ' + route.name }))} placeholder="No active routes" />
+  const change = (routeIds: string[]) => {
+    if (assignedIds.some(routeId => !routeIds.includes(routeId))) return
+    void save(routeIds)
+  }
+  const confirmRemoval = (routeId: string) => {
+    const route = routes.find(item => item.id === routeId)
+    if (!route) return
+    Modal.confirm({
+      title: 'Remove route from bus?',
+      content: `Are you sure you want to remove "${route.code} - ${route.name}" from "${bus.code}"?`,
+      okText: 'Remove', okButtonProps: { danger: true }, cancelText: 'Cancel',
+      onOk: () => save(assignedIds.filter(id => id !== routeId)),
+    })
+  }
+  return <Select mode="multiple" loading={saving} value={assignedIds} onChange={change} tagRender={({ label, value, closable }) => <Tag closable={closable} onMouseDown={event => { event.preventDefault(); event.stopPropagation() }} onClose={event => { event.preventDefault(); event.stopPropagation(); confirmRemoval(String(value)) }}>{label}</Tag>} style={{ minWidth: 240 }} options={routes.filter(route => route.active).map(route => ({ value: route.id, label: route.code + ' - ' + route.name }))} placeholder="No active routes" />
 }
 
 function BusModal({ open, bus, client, reload, onClose }: { open: boolean; bus: Bus | null; client: Client; reload: () => Promise<void>; onClose: () => void }) {
@@ -109,9 +124,9 @@ function DevicePanel({ client, buses, devices, reload }: { client: Client; buses
 
 function DeviceModal({ open, device, client, buses, reload, onClose }: { open: boolean; device: Device | null; client: Client; buses: Bus[]; reload: () => Promise<void>; onClose: () => void }) {
   const [form] = Form.useForm(); const [saving, setSaving] = useState(false)
-  useEffect(() => { if (open) form.setFieldsValue(device ?? { deviceCode: '', hardwareSerial: '', busId: undefined, active: true }) }, [open, device, form])
-  const save = async (values: Omit<Device, 'id' | 'busCode' | 'lastSeenAt'>) => { setSaving(true); try { if (device) await client.updateDevice(device.id, values); else await client.createDevice(values); await reload(); message.success(device ? 'Device updated' : 'Device registered'); onClose() } catch (cause) { message.error(cause instanceof Error ? cause.message : 'Unable to save device') } finally { setSaving(false) } }
-  return <Modal open={open} title={device ? 'Edit device' : 'Register device'} onCancel={onClose} onOk={() => form.submit()} confirmLoading={saving} destroyOnHidden><Form form={form} layout="vertical" onFinish={save}><Form.Item name="deviceCode" label="Device code" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="hardwareSerial" label="Hardware serial" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="busId" label="Bus" rules={[{ required: true }]}><Select options={buses.filter(bus => bus.active).map(bus => ({ value: bus.id, label: `${bus.code} - ${bus.name}` }))} /></Form.Item><Form.Item name="active" valuePropName="checked"><Checkbox>Active</Checkbox></Form.Item></Form></Modal>
+  useEffect(() => { if (open) form.setFieldsValue(device ? { hardwareSerial: device.hardwareSerial, busId: device.busId, active: device.active } : { hardwareSerial: '', busId: undefined, active: true }) }, [open, device, form])
+  const save = async (values: Omit<Device, 'id' | 'deviceCode' | 'busCode' | 'lastSeenAt'>) => { setSaving(true); try { if (device) await client.updateDevice(device.id, values); else await client.createDevice(values); await reload(); message.success(device ? 'Device updated' : 'Device registered'); onClose() } catch (cause) { message.error(cause instanceof Error ? cause.message : 'Unable to save device') } finally { setSaving(false) } }
+  return <Modal open={open} title={device ? 'Edit device' : 'Register device'} onCancel={onClose} onOk={() => form.submit()} confirmLoading={saving} destroyOnHidden><Form form={form} layout="vertical" onFinish={save}>{device && <Form.Item label="Device code"><Input value={device.deviceCode} readOnly /></Form.Item>}<Form.Item name="hardwareSerial" label="Hardware serial" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="busId" label="Bus" rules={[{ required: true }]}><Select options={buses.filter(bus => bus.active).map(bus => ({ value: bus.id, label: `${bus.code} - ${bus.name}` }))} /></Form.Item><Form.Item name="active" valuePropName="checked"><Checkbox>Active</Checkbox></Form.Item></Form></Modal>
 }
 
 function AssignmentHistoryModal({ device, client, onClose }: { device: Device; client: Client; onClose: () => void }) {

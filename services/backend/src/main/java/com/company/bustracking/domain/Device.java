@@ -53,8 +53,7 @@ public class Device {
     public boolean isActive() { return active; }
     public Instant getLastSeenAt() { return lastSeenAt; }
 
-    public void update(String deviceCode, String hardwareSerial, Bus bus, boolean active) {
-        this.deviceCode = deviceCode;
+    public void update(String hardwareSerial, Bus bus, boolean active) {
         this.hardwareSerial = hardwareSerial;
         this.bus = bus;
         this.active = active;
