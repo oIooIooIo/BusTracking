@@ -2,6 +2,7 @@ package com.company.bustracking;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -86,5 +87,27 @@ class AdminManagementIntegrationTests {
                 .andExpect(jsonPath("$", hasSize(2)))
                 .andExpect(jsonPath("$[0].busCode", is("BUS-03")))
                 .andExpect(jsonPath("$[1].busCode", is("BUS-02")));
+    }
+
+    @Test
+    void detachingDeviceClosesHistoryAndForcesItInactive() throws Exception {
+        mvc.perform(put("/api/admin/v1/devices/{deviceId}", DEVICE_02)
+                        .with(httpBasic("admin", "admin123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"hardwareSerial":"QCM2290-TEST0002","active":true}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deviceCode", is("ANDROID-TEST-02")))
+                .andExpect(jsonPath("$.busId").doesNotExist())
+                .andExpect(jsonPath("$.busCode").doesNotExist())
+                .andExpect(jsonPath("$.active", is(false)));
+
+        mvc.perform(get("/api/admin/v1/devices/{deviceId}/assignment-history", DEVICE_02)
+                        .with(httpBasic("admin", "admin123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].busCode", is("BUS-02")))
+                .andExpect(jsonPath("$[0].removedAt", notNullValue()));
     }
 }

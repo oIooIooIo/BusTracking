@@ -22,7 +22,7 @@ public class Device {
     @Column(name = "hardware_serial", nullable = false, unique = true)
     private String hardwareSerial;
 
-    @ManyToOne(fetch = FetchType.EAGER, optional = false)
+    @ManyToOne(fetch = FetchType.EAGER, optional = true)
     @JoinColumn(name = "bus_id")
     private Bus bus;
 

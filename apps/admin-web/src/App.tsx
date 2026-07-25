@@ -62,7 +62,7 @@ function BusPanel({ client, buses, routes, reload }: { client: Client; buses: Bu
   const [editing, setEditing] = useState<Bus | null | undefined>()
   return <Card><Space className="toolbar"><Button icon={<PlusOutlined />} onClick={() => setEditing(null)}>Add bus</Button></Space><Table rowKey="id" dataSource={buses} pagination={false} columns={[
     { title: 'Bus code', dataIndex: 'code' }, { title: 'Display name', dataIndex: 'name' },
-    { title: 'Hardware serial', dataIndex: 'hardwareSerial', render: value => value ?? <Tag color="orange">Not assigned</Tag> },
+    { title: 'Installed device', render: (_, bus) => bus.installedDeviceCode ? `${bus.installedDeviceCode} / ${bus.installedHardwareSerial}` : <Tag color="orange">Not installed</Tag> },
     { title: 'Status', dataIndex: 'active', render: active => active ? <Tag color="green">Active</Tag> : <Tag>Inactive</Tag> },
     { title: 'Routes', render: (_, bus) => <BusRouteAssignment client={client} bus={bus} routes={routes} reload={reload} /> },
     { title: 'Config sync', render: (_, bus) => bus.configurationSynced ? <Tag color="green">Synced v{bus.appliedConfigurationVersion}</Tag> : <Tag color="orange">Waiting: desired v{bus.desiredConfigurationVersion}, device v{bus.appliedConfigurationVersion ?? 'none'}</Tag> },
@@ -98,24 +98,24 @@ function BusRouteAssignment({ client, bus, routes, reload }: { client: Client; b
 
 function BusModal({ open, bus, client, reload, onClose }: { open: boolean; bus: Bus | null; client: Client; reload: () => Promise<void>; onClose: () => void }) {
   const [form] = Form.useForm(); const [saving, setSaving] = useState(false)
-  useEffect(() => { if (open) form.setFieldsValue(bus ? { code: bus.code, name: bus.name, active: bus.active, clearPermissions: false } : { code: '', name: '', hardwareSerial: '', active: true }) }, [open, bus, form])
-  const save = async (values: { code: string; name: string; hardwareSerial?: string; active: boolean; clearPermissions?: boolean }) => {
+  useEffect(() => { if (open) form.setFieldsValue(bus ? { code: bus.code, name: bus.name, active: bus.active, clearPermissions: false } : { code: '', name: '', active: true }) }, [open, bus, form])
+  const save = async (values: { code: string; name: string; active: boolean; clearPermissions?: boolean }) => {
     setSaving(true)
     try {
       if (bus) await client.updateBus(bus.id, { code: values.code, name: values.name, active: values.active, clearPermissions: values.clearPermissions ?? false })
-      else await client.createBus({ code: values.code, name: values.name, hardwareSerial: values.hardwareSerial!, active: values.active })
+      else await client.createBus({ code: values.code, name: values.name, active: values.active })
       await reload(); message.success(bus ? 'Bus updated' : 'Bus added'); onClose()
     } catch (cause) { message.error(cause instanceof Error ? cause.message : 'Unable to save bus') } finally { setSaving(false) }
   }
   const activeValue = Form.useWatch('active', form)
   const reactivating = Boolean(bus && !bus.active && activeValue)
-  return <Modal open={open} title={bus ? 'Edit bus' : 'Add bus'} onCancel={onClose} onOk={() => form.submit()} confirmLoading={saving} destroyOnHidden><Form form={form} layout="vertical" onFinish={save}><Form.Item name="code" label="Bus code" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="name" label="Display name" rules={[{ required: true }]}><Input /></Form.Item>{!bus && <Form.Item name="hardwareSerial" label="Hardware serial" rules={[{ required: true }]}><Input /></Form.Item>}<Form.Item name="active" valuePropName="checked"><Checkbox>Active</Checkbox></Form.Item>{reactivating && bus && bus.permissionCount > 0 && <Alert type="warning" showIcon message={`This bus has ${bus.permissionCount} existing permissions`} description={<Form.Item name="clearPermissions" valuePropName="checked" noStyle><Checkbox>Clear existing permissions when reactivating</Checkbox></Form.Item>} />}</Form></Modal>
+  return <Modal open={open} title={bus ? 'Edit bus' : 'Add bus'} onCancel={onClose} onOk={() => form.submit()} confirmLoading={saving} destroyOnHidden><Form form={form} layout="vertical" onFinish={save}><Form.Item name="code" label="Bus code" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="name" label="Display name" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="active" valuePropName="checked"><Checkbox>Active</Checkbox></Form.Item>{reactivating && bus && bus.permissionCount > 0 && <Alert type="warning" showIcon message={`This bus has ${bus.permissionCount} existing permissions`} description={<Form.Item name="clearPermissions" valuePropName="checked" noStyle><Checkbox>Clear existing permissions when reactivating</Checkbox></Form.Item>} />}</Form></Modal>
 }
 
 function DevicePanel({ client, buses, devices, reload }: { client: Client; buses: Bus[]; devices: Device[]; reload: () => Promise<void> }) {
   const [editing, setEditing] = useState<Device | null | undefined>(); const [historyDevice, setHistoryDevice] = useState<Device>()
   return <Card><Alert className="toolbar" type="info" showIcon message="Before moving a device, sync pending offline data, deactivate it, reassign it, then activate it on the new bus." /><Button className="toolbar" icon={<MobileOutlined />} onClick={() => setEditing(null)}>Register device</Button><Table rowKey="id" dataSource={devices} pagination={false} columns={[
-    { title: 'Device code', dataIndex: 'deviceCode' }, { title: 'Hardware serial', dataIndex: 'hardwareSerial' }, { title: 'Bus', dataIndex: 'busCode' },
+    { title: 'Device code', dataIndex: 'deviceCode' }, { title: 'Hardware serial', dataIndex: 'hardwareSerial' }, { title: 'Bus', dataIndex: 'busCode', render: value => value ?? <Tag color="orange">Unassigned</Tag> },
     { title: 'Status', dataIndex: 'active', render: active => active ? <Tag color="green">Active</Tag> : <Tag>Inactive</Tag> },
     { title: 'Last seen', dataIndex: 'lastSeenAt', render: value => value ? dayjs(value).format('YYYY-MM-DD HH:mm:ss') : 'Never' },
     { title: 'Action', render: (_, device) => <Space><Button type="link" icon={<EditOutlined />} onClick={() => setEditing(device)}>Edit</Button><Button type="link" icon={<HistoryOutlined />} onClick={() => setHistoryDevice(device)}>History</Button></Space> },
@@ -124,9 +124,10 @@ function DevicePanel({ client, buses, devices, reload }: { client: Client; buses
 
 function DeviceModal({ open, device, client, buses, reload, onClose }: { open: boolean; device: Device | null; client: Client; buses: Bus[]; reload: () => Promise<void>; onClose: () => void }) {
   const [form] = Form.useForm(); const [saving, setSaving] = useState(false)
-  useEffect(() => { if (open) form.setFieldsValue(device ? { hardwareSerial: device.hardwareSerial, busId: device.busId, active: device.active } : { hardwareSerial: '', busId: undefined, active: true }) }, [open, device, form])
-  const save = async (values: Omit<Device, 'id' | 'deviceCode' | 'busCode' | 'lastSeenAt'>) => { setSaving(true); try { if (device) await client.updateDevice(device.id, values); else await client.createDevice(values); await reload(); message.success(device ? 'Device updated' : 'Device registered'); onClose() } catch (cause) { message.error(cause instanceof Error ? cause.message : 'Unable to save device') } finally { setSaving(false) } }
-  return <Modal open={open} title={device ? 'Edit device' : 'Register device'} onCancel={onClose} onOk={() => form.submit()} confirmLoading={saving} destroyOnHidden><Form form={form} layout="vertical" onFinish={save}>{device && <Form.Item label="Device code"><Input value={device.deviceCode} readOnly /></Form.Item>}<Form.Item name="hardwareSerial" label="Hardware serial" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="busId" label="Bus" rules={[{ required: true }]}><Select options={buses.filter(bus => bus.active).map(bus => ({ value: bus.id, label: `${bus.code} - ${bus.name}` }))} /></Form.Item><Form.Item name="active" valuePropName="checked"><Checkbox>Active</Checkbox></Form.Item></Form></Modal>
+  useEffect(() => { if (open) form.setFieldsValue(device ? { hardwareSerial: device.hardwareSerial, busId: device.busId, active: device.active } : { hardwareSerial: '', busId: undefined, active: false }) }, [open, device, form])
+  const selectedBusId = Form.useWatch('busId', form)
+  const save = async (values: Omit<Device, 'id' | 'deviceCode' | 'busCode' | 'lastSeenAt'>) => { setSaving(true); try { const input = { ...values, busId: values.busId || undefined, active: Boolean(values.busId && values.active) }; if (device) await client.updateDevice(device.id, input); else await client.createDevice(input); await reload(); message.success(device ? 'Device updated' : 'Device registered'); onClose() } catch (cause) { message.error(cause instanceof Error ? cause.message : 'Unable to save device') } finally { setSaving(false) } }
+  return <Modal open={open} title={device ? 'Edit device' : 'Register device'} onCancel={onClose} onOk={() => form.submit()} confirmLoading={saving} destroyOnHidden><Form form={form} layout="vertical" onFinish={save}>{device && <Form.Item label="Device code"><Input value={device.deviceCode} readOnly /></Form.Item>}<Form.Item name="hardwareSerial" label="Hardware serial" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="busId" label="Bus"><Select allowClear placeholder="Unassigned" onClear={() => form.setFieldValue('active', false)} options={buses.filter(bus => bus.active).map(bus => ({ value: bus.id, label: `${bus.code} - ${bus.name}` }))} /></Form.Item><Form.Item name="active" valuePropName="checked"><Checkbox disabled={!selectedBusId}>Active</Checkbox></Form.Item></Form></Modal>
 }
 
 function AssignmentHistoryModal({ device, client, onClose }: { device: Device; client: Client; onClose: () => void }) {

@@ -135,19 +135,18 @@ public class AdminApi {
     }
 
     public record BusInput(@NotBlank @Size(max = 50) String code,
-            @NotBlank @Size(max = 100) String name,
-            @NotBlank @Size(max = 100) String hardwareSerial, boolean active) {}
+            @NotBlank @Size(max = 100) String name, boolean active) {}
     public record BusUpdateInput(@NotBlank @Size(max = 50) String code,
             @NotBlank @Size(max = 100) String name, boolean active, boolean clearPermissions) {}
-    public record BusView(UUID id, String code, String name, String hardwareSerial,
-            boolean active, long permissionVersion, long permissionCount,
+    public record BusView(UUID id, String code, String name, String installedDeviceCode,
+            String installedHardwareSerial, boolean active, long permissionVersion, long permissionCount,
             List<com.company.bustracking.service.RouteService.RouteSummary> routes,
             long desiredConfigurationVersion, Long appliedConfigurationVersion,
             boolean configurationSynced, Instant configurationAppliedAt) {}
     public record DeviceCreateInput(@NotBlank @Size(max = 100) String hardwareSerial,
-            @NotNull UUID busId, boolean active) {}
+            UUID busId, boolean active) {}
     public record DeviceUpdateInput(@NotBlank @Size(max = 100) String hardwareSerial,
-            @NotNull UUID busId, boolean active) {}
+            UUID busId, boolean active) {}
     public record DeviceView(UUID id, String deviceCode, String hardwareSerial, UUID busId,
             String busCode, boolean active, Instant lastSeenAt) {}
     public record DeviceAssignmentView(UUID id, UUID deviceId, UUID busId, String busCode,

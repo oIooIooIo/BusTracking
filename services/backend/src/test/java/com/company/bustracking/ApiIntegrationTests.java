@@ -51,7 +51,7 @@ class ApiIntegrationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(greaterThanOrEqualTo(3))))
                 .andExpect(jsonPath("$[*].code", hasItem("BUS-01")))
-                .andExpect(jsonPath("$[?(@.code == 'BUS-01')].hardwareSerial",
+                .andExpect(jsonPath("$[?(@.code == 'BUS-01')].installedHardwareSerial",
                         hasItem(DEVICE_HARDWARE_SERIAL)))
                 .andExpect(jsonPath("$[*].code", hasItem("BUS-02")))
                 .andExpect(jsonPath("$[*].code", hasItem("BUS-03")));
@@ -68,7 +68,7 @@ class ApiIntegrationTests {
     }
 
     @Test
-    void creatingBusAlsoRegistersItsHardwareSerial() throws Exception {
+    void creatingBusDoesNotAutomaticallyRegisterADevice() throws Exception {
         mvc.perform(post("/api/admin/v1/buses")
                         .with(httpBasic("admin", "admin123"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -76,20 +76,36 @@ class ApiIntegrationTests {
                                 {
                                   "code": "BUS-NEW",
                                   "name": "New Bus",
-                                  "hardwareSerial": "qcm2290-new0001",
                                   "active": true
                                 }
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code", is("BUS-NEW")))
-                .andExpect(jsonPath("$.hardwareSerial", is("QCM2290-NEW0001")));
+                .andExpect(jsonPath("$.installedDeviceCode").doesNotExist())
+                .andExpect(jsonPath("$.installedHardwareSerial").doesNotExist());
 
         mvc.perform(get("/api/admin/v1/devices").with(httpBasic("admin", "admin123")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.busCode == 'BUS-NEW')].hardwareSerial",
-                        hasItem("QCM2290-NEW0001")))
-                .andExpect(jsonPath("$[?(@.busCode == 'BUS-NEW')].deviceCode",
-                        hasItem(matchesPattern("DEVICE-[0-9]+"))));
+                .andExpect(jsonPath("$[?(@.busCode == 'BUS-NEW')]", empty()));
+    }
+
+    @Test
+    void creatingUnassignedDeviceForcesItInactive() throws Exception {
+        mvc.perform(post("/api/admin/v1/devices")
+                        .with(httpBasic("admin", "admin123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "hardwareSerial": "qcm2290-unassigned01",
+                                  "active": true
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.deviceCode", matchesPattern("DEVICE-[0-9]+")))
+                .andExpect(jsonPath("$.hardwareSerial", is("QCM2290-UNASSIGNED01")))
+                .andExpect(jsonPath("$.busId").doesNotExist())
+                .andExpect(jsonPath("$.busCode").doesNotExist())
+                .andExpect(jsonPath("$.active", is(false)));
     }
 
     @Test

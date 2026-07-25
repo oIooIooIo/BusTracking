@@ -68,9 +68,6 @@ public class AdminService {
     public BusView createBus(BusInput input) {
         validateBusIdentity(null, input.code());
         Bus bus = buses.save(new Bus(input.code().trim(), input.name().trim(), input.active()));
-        Device device = devices.save(new Device(nextDeviceCode(),
-                normalizeHardwareSerial(input.hardwareSerial()), bus, input.active()));
-        assignmentHistory.save(new DeviceAssignmentHistory(device, bus, Instant.now()));
         return toBusView(bus);
     }
 
@@ -95,11 +92,12 @@ public class AdminService {
     @Transactional
     public DeviceView createDevice(DeviceCreateInput input) {
         validateDeviceHardwareSerial(null, input.hardwareSerial());
-        Bus bus = activeBus(input.busId());
-        validateActiveDevice(null, bus, input.active());
+        Bus bus = input.busId() == null ? null : activeBus(input.busId());
+        boolean active = bus != null && input.active();
+        if (bus != null) validateActiveDevice(null, bus, active);
         Device device = devices.save(new Device(nextDeviceCode(),
-                normalizeHardwareSerial(input.hardwareSerial()), bus, input.active()));
-        assignmentHistory.save(new DeviceAssignmentHistory(device, bus, Instant.now()));
+                normalizeHardwareSerial(input.hardwareSerial()), bus, active));
+        if (bus != null) assignmentHistory.save(new DeviceAssignmentHistory(device, bus, Instant.now()));
         return toView(device);
     }
 
@@ -107,16 +105,19 @@ public class AdminService {
     public DeviceView updateDevice(UUID id, DeviceUpdateInput input) {
         Device device = device(id);
         validateDeviceHardwareSerial(id, input.hardwareSerial());
-        Bus targetBus = activeBus(input.busId());
-        validateActiveDevice(id, targetBus, input.active());
-        boolean reassigned = !device.getBus().getId().equals(targetBus.getId());
+        Bus targetBus = input.busId() == null ? null : activeBus(input.busId());
+        boolean active = targetBus != null && input.active();
+        if (targetBus != null) validateActiveDevice(id, targetBus, active);
+        UUID currentBusId = device.getBus() == null ? null : device.getBus().getId();
+        UUID targetBusId = targetBus == null ? null : targetBus.getId();
+        boolean reassigned = !java.util.Objects.equals(currentBusId, targetBusId);
         if (reassigned) {
             Instant now = Instant.now();
             assignmentHistory.findByDevice_IdAndRemovedAtIsNull(id).ifPresent(history -> history.close(now));
             assignmentHistory.flush();
-            assignmentHistory.save(new DeviceAssignmentHistory(device, targetBus, now));
+            if (targetBus != null) assignmentHistory.save(new DeviceAssignmentHistory(device, targetBus, now));
         }
-        device.update(normalizeHardwareSerial(input.hardwareSerial()), targetBus, input.active());
+        device.update(normalizeHardwareSerial(input.hardwareSerial()), targetBus, active);
         return toView(devices.save(device));
     }
 
@@ -266,17 +267,22 @@ public class AdminService {
     private Employee employee(UUID id) { return employees.findById(id).orElseThrow(() -> new EntityNotFoundException("Employee not found: " + id)); }
 
     private BusView toBusView(Bus bus) {
-        String serial = devices.findFirstByBus_IdOrderByActiveDesc(bus.getId()).map(Device::getHardwareSerial).orElse(null);
+        Device installed = devices.findFirstByBus_IdOrderByActiveDesc(bus.getId()).orElse(null);
         RouteService.SyncView sync = routes.sync(bus.getId());
-        return new BusView(bus.getId(), bus.getCode(), bus.getName(), serial, bus.isActive(),
+        return new BusView(bus.getId(), bus.getCode(), bus.getName(),
+                installed == null ? null : installed.getDeviceCode(),
+                installed == null ? null : installed.getHardwareSerial(), bus.isActive(),
                 bus.getPermissionVersion(), permissions.countByBus_Id(bus.getId()),
                 routes.routeSummaries(bus.getId()), sync.desiredVersion(), sync.appliedVersion(),
                 sync.synced(), sync.appliedAt());
     }
     private static DeviceView toView(Device device) {
+        Bus bus = device.getBus();
         return new DeviceView(device.getId(), device.getDeviceCode(), device.getHardwareSerial(),
-                device.getBus().getId(), device.getBus().getCode(), device.isActive(), device.getLastSeenAt());
+                bus == null ? null : bus.getId(), bus == null ? null : bus.getCode(),
+                device.isActive(), device.getLastSeenAt());
     }
+
     private static DeviceAssignmentView toView(DeviceAssignmentHistory history) {
         return new DeviceAssignmentView(history.getId(), history.getDevice().getId(), history.getBus().getId(),
                 history.getBus().getCode(), history.getBus().getName(), history.getInstalledAt(), history.getRemovedAt());
