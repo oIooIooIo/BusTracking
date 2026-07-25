@@ -88,9 +88,9 @@ public class AdminApi {
 
     @GetMapping("/devices") List<DeviceView> devices() { return service.devices(); }
     @PostMapping("/devices") @ResponseStatus(HttpStatus.CREATED)
-    DeviceView createDevice(@Valid @RequestBody DeviceInput input) { return service.createDevice(input); }
+    DeviceView createDevice(@Valid @RequestBody DeviceCreateInput input) { return service.createDevice(input); }
     @PutMapping("/devices/{deviceId}")
-    DeviceView updateDevice(@PathVariable UUID deviceId, @Valid @RequestBody DeviceInput input) {
+    DeviceView updateDevice(@PathVariable UUID deviceId, @Valid @RequestBody DeviceUpdateInput input) {
         return service.updateDevice(deviceId, input);
     }
     @GetMapping("/devices/{deviceId}/assignment-history")
@@ -144,8 +144,10 @@ public class AdminApi {
             List<com.company.bustracking.service.RouteService.RouteSummary> routes,
             long desiredConfigurationVersion, Long appliedConfigurationVersion,
             boolean configurationSynced, Instant configurationAppliedAt) {}
-    public record DeviceInput(@NotBlank @Size(max = 100) String deviceCode,
-            @NotBlank @Size(max = 100) String hardwareSerial, @NotNull UUID busId, boolean active) {}
+    public record DeviceCreateInput(@NotBlank @Size(max = 100) String hardwareSerial,
+            @NotNull UUID busId, boolean active) {}
+    public record DeviceUpdateInput(@NotBlank @Size(max = 100) String hardwareSerial,
+            @NotNull UUID busId, boolean active) {}
     public record DeviceView(UUID id, String deviceCode, String hardwareSerial, UUID busId,
             String busCode, boolean active, Instant lastSeenAt) {}
     public record DeviceAssignmentView(UUID id, UUID deviceId, UUID busId, String busCode,

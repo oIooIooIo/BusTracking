@@ -58,7 +58,7 @@ class AdminManagementIntegrationTests {
                         .with(httpBasic("admin", "admin123"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"deviceCode":"ANDROID-TEST-02","hardwareSerial":"QCM2290-TEST0002",
+                                {"hardwareSerial":"QCM2290-TEST0002",
                                  "busId":"00000000-0000-0000-0000-000000000002","active":false}
                                 """))
                 .andExpect(status().isOk());
@@ -73,11 +73,12 @@ class AdminManagementIntegrationTests {
                         .with(httpBasic("admin", "admin123"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"deviceCode":"ANDROID-TEST-02","hardwareSerial":"QCM2290-TEST0002",
+                                {"hardwareSerial":"QCM2290-TEST0002",
                                  "busId":"%s","active":true}
                                 """.formatted(BUS_03)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.busCode", is("BUS-03")));
+                .andExpect(jsonPath("$.busCode", is("BUS-03")))
+                .andExpect(jsonPath("$.deviceCode", is("ANDROID-TEST-02")));
 
         mvc.perform(get("/api/admin/v1/devices/{deviceId}/assignment-history", DEVICE_02)
                         .with(httpBasic("admin", "admin123")))

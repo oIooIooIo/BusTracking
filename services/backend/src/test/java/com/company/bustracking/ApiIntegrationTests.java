@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.matchesPattern;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -86,7 +87,9 @@ class ApiIntegrationTests {
         mvc.perform(get("/api/admin/v1/devices").with(httpBasic("admin", "admin123")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.busCode == 'BUS-NEW')].hardwareSerial",
-                        hasItem("QCM2290-NEW0001")));
+                        hasItem("QCM2290-NEW0001")))
+                .andExpect(jsonPath("$[?(@.busCode == 'BUS-NEW')].deviceCode",
+                        hasItem(matchesPattern("DEVICE-[0-9]+"))));
     }
 
     @Test
