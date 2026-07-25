@@ -5,10 +5,13 @@ plugins {
 }
 
 val apiBaseUrl = providers.gradleProperty("apiBaseUrl")
-    .getOrElse("https://taxiportal-dev.fushan.fihnbb.com/api/device/v1/")
+    .orElse(providers.environmentVariable("MOBILE_API_BASE_URL"))
+    .orNull ?: error("MOBILE_API_BASE_URL or -PapiBaseUrl must be set")
 val deviceApiKey = providers.gradleProperty("deviceApiKey")
-    .getOrElse("demo-device-key")
+    .orElse(providers.environmentVariable("DEVICE_API_KEY"))
+    .orNull ?: error("DEVICE_API_KEY or -PdeviceApiKey must be set")
 val usesCleartextTraffic = providers.gradleProperty("usesCleartextTraffic")
+    .orElse(providers.environmentVariable("MOBILE_USES_CLEARTEXT"))
     .getOrElse("false")
 
 android {

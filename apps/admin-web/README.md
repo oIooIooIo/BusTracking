@@ -12,13 +12,14 @@ Implemented Demo functions:
 
 ## Run
 
-Start the backend first, then:
+Start the backend first, then run from the repository root:
 
 ```bash
-cd apps/admin-web
-npm install
-npm run dev
+./scripts/environment/start-local.sh frontend
 ```
+
+To use an approved untracked runtime file, run
+`./scripts/environment/start-local.sh frontend .env.local`.
 
 Open `http://localhost:5173` and use `admin` / `admin123`.
 
@@ -27,6 +28,6 @@ The Vite development server calls the backend at `http://localhost:8080`.
 ## Verify
 
 ```bash
-npm run lint
-npm run build
+cd apps/admin-web && npm run lint
+./scripts/environment/build-frontend.sh local
 ```

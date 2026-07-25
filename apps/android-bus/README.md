@@ -19,34 +19,31 @@ Implemented functions:
 Install Android Studio and Android SDK 36, then:
 
 ```bash
-cd apps/android-bus
-./gradlew :app:assembleDebug
+./scripts/environment/build-mobile.sh local
 ```
 
 The debug APK is generated under `app/build/outputs/apk/debug`.
 
-## Demo Configuration
+## Environment Configuration
 
-The default demo APK uses:
+Android has no implicit LOCAL, DEV, or PROD endpoint. It requires values from
+the approved environment template before Gradle configuration. The authoritative
+instructions are in `docs/environment-configuration.md`.
 
-- API base URL: `https://taxiportal-dev.fushan.fihnbb.com/api/device/v1/`
-- Shared device API key: `demo-device-key`
-- Cleartext HTTP traffic: disabled
+The build reads:
 
-For a different HTTPS endpoint, pass the target device API URL when building:
+- `MOBILE_API_BASE_URL`
+- `MOBILE_USES_CLEARTEXT`
+- `DEVICE_API_KEY`
+
+Gradle properties with the legacy names `apiBaseUrl`, `usesCleartextTraffic`,
+and `deviceApiKey` may be passed explicitly, but their values must match the
+approved environment configuration.
+
+Example using an approved runtime file:
 
 ```bash
-./gradlew :app:assembleDebug \
-  -PapiBaseUrl=https://bus.example.internal/api/device/v1/
-```
-
-For local emulator development against a local backend, pass the local device
-API URL explicitly and enable cleartext traffic only for that local build:
-
-```bash
-./gradlew :app:assembleDebug \
-  -PapiBaseUrl=http://<local-device-api-url>/ \
-  -PusesCleartextTraffic=true
+./scripts/environment/build-mobile.sh local .env.local
 ```
 
 Every API request includes the shared API key and

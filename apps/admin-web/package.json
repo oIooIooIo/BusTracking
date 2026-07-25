@@ -5,7 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:local": "../../scripts/environment/run-frontend.sh local",
     "build": "tsc -b && vite build",
+    "build:local": "../../scripts/environment/build-frontend.sh local",
+    "build:dev": "../../scripts/environment/build-frontend.sh dev",
+    "build:prod": "../../scripts/environment/build-frontend.sh prod",
     "lint": "eslint .",
     "preview": "vite preview"
   },

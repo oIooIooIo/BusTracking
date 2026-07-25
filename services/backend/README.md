@@ -4,18 +4,22 @@ Java 21 / Spring Boot 3 backend for device synchronization and Admin Web APIs.
 
 ## Run
 
-Start local infrastructure from the repository root:
+For the approved non-Docker LOCAL environment, start PostgreSQL/PostGIS and
+Redis directly on the computer, then run from the repository root:
 
 ```bash
-./infra/local/local-up.sh
+./scripts/environment/start-local.sh check
+./scripts/environment/start-local.sh backend
 ```
 
-Then:
+To use an approved untracked runtime file:
 
 ```bash
-cd services/backend
-./mvnw spring-boot:run
+./scripts/environment/start-local.sh backend .env.local
 ```
+
+Do not run Maven directly without first loading an approved environment. The
+backend intentionally has no fallback values for environment-controlled fields.
 
 Default endpoints:
 
@@ -43,7 +47,9 @@ boarding events at most 200 records per request. Route queries are limited to
 ## Build
 
 ```bash
-./mvnw clean test package
+source scripts/environment/load-env.sh
+bus_env_load local
+cd services/backend && ./mvnw clean test package
 ```
 
 Flyway migrations are in `src/main/resources/db/migration`.

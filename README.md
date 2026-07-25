@@ -1,5 +1,10 @@
 # Bus Tracking System
 
+Environment values and the mandatory approval policy are documented in
+[`docs/environment-configuration.md`](docs/environment-configuration.md). Use
+the protected templates under `config/environments/`; do not infer or change
+environment values during routine start, build, or deployment work.
+
 Bus tracking Demo implemented as a monorepo. The shared contract is documented
 before implementation so Android, backend, and Admin Web use compatible data.
 
@@ -10,7 +15,8 @@ before implementation so Android, backend, and Admin Web use compatible data.
 - `services/backend`: Java 21 / Spring Boot 3 API with JPA, Flyway, PostGIS,
   Redis configuration, and Swagger.
 - `apps/admin-web`: React / Vite / TypeScript / Ant Design administration UI.
-- `infra/local`: Local PostgreSQL/PostGIS and Redis scripts.
+- `infra/local`: Legacy Docker helper scripts; these are not used by the
+  approved non-Docker LOCAL environment.
 - `docs`: Approved MVP specification, architecture, and data contract.
 
 ## Quick Start
@@ -19,28 +25,28 @@ Requirements:
 
 - Java 21
 - Node.js and npm
-- Docker Engine
+- PostgreSQL 16 with PostGIS 3.4
+- Redis 7
 - Android Studio with Android SDK 36 for the Android APK
 
-Start infrastructure:
+Create the optional untracked LOCAL runtime file. PostgreSQL/PostGIS and Redis
+must run as computer services (not Docker):
 
 ```bash
-./infra/local/local-up.sh
+cp config/environments/local.env.example .env.local
+./scripts/environment/start-local.sh check .env.local
 ```
 
 Start the backend:
 
 ```bash
-cd services/backend
-./mvnw spring-boot:run
+./scripts/environment/start-local.sh backend .env.local
 ```
 
 Start Admin Web in another terminal:
 
 ```bash
-cd apps/admin-web
-npm install
-npm run dev
+./scripts/environment/start-local.sh frontend .env.local
 ```
 
 Open `http://localhost:5173`. Demo Admin credentials are `admin` /
@@ -63,7 +69,7 @@ These credentials are for local Demo use only.
 ```bash
 cd services/backend && ./mvnw clean test package
 cd apps/admin-web && npm run lint && npm run build
-cd apps/android-bus && ./gradlew :app:assembleDebug
+./scripts/environment/start-local.sh mobile .env.local
 ```
 
 The Android build requires a configured Android SDK. See each component's

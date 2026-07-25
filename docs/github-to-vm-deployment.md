@@ -56,7 +56,7 @@ docker save -o bus-tracking-images-0.1.0.tar \
 
 - `bus-tracking-images-0.1.0.tar`
 - `infra/vm/compose.yaml`
-- `infra/vm/.env.example`
+- `config/environments/dev.env.example`
 - IT 提供的 `tls.crt` 與 `tls.key`
 
 ## VM：載入 images、設定與啟動
@@ -86,22 +86,22 @@ docker images | grep -E 'bus-tracking|postgis|redis'
 第一次部署才需建立設定檔：
 
 ```bash
-cd /opt/bus-tracking/infra/vm
-cp .env.example .env
-chmod 600 .env
-nano .env
+cd /opt/bus-tracking
+cp config/environments/dev.env.example .env.dev
+chmod 600 .env.dev
+nano .env.dev
 ```
 
-將 `CHANGE_ME_*` 和 `VM_IP_OR_DNS` 全部替換為實際值。完成後啟動或更新服務：
+僅在專案擁有者明確批准後填入 `CHANGE_ME_*`。完成後啟動或更新服務：
 
 ```bash
-cd /opt/bus-tracking/infra/vm
-docker compose --env-file .env up -d
-docker compose ps
+cd /opt/bus-tracking
+docker compose --env-file .env.dev -f infra/vm/compose.yaml up -d
+docker compose --env-file .env.dev -f infra/vm/compose.yaml ps
 curl -f http://localhost:8080/actuator/health
 ```
 
-管理介面為 `https://VM_IP_OR_DNS/`；後端 Swagger 可在 VM 內以 `http://localhost:8080/swagger-ui.html` 檢查；Android 裝置 API 使用 `https://VM_IP_OR_DNS/api/device/v1/`。資料庫資料保存在 Docker named volumes，正常更新服務不會刪除資料。
+DEV 管理介面與 Android API 使用 `config/environments/dev.env.example` 核准的網址；後端 Swagger 可在 VM 內以 `http://localhost:8080/swagger-ui.html` 檢查。資料庫資料保存在 Docker named volumes，正常更新服務不會刪除資料。
 
 ## 之後每次發布
 
@@ -113,4 +113,4 @@ git commit -m "Describe this release"
 git push origin main
 ```
 
-然後在打包電腦重新建置與測試 images，通過安全掃描後交付新的 image tar 給 IT，最後在 VM 執行 `docker load` 與 `docker compose --env-file .env up -d`。建議每次發布以 Git tag 固定版本，例如 `git tag -a v0.1.0 -m "first VM release" && git push origin v0.1.0`，並同步更新 image tag。
+然後在打包電腦重新建置與測試 images，通過安全掃描後交付新的 image tar 給 IT，最後在 VM 執行 `docker load` 與使用已批准 `.env.dev` 的 Compose 指令。建議每次發布以 Git tag 固定版本，並在取得專案擁有者批准後同步更新環境檔中的 image tag。
