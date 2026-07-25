@@ -53,7 +53,7 @@ function AdminConsole({ credentials, onLogout }: { credentials: Credentials; onL
     { key: 'routes', label: 'Routes', children: <RouteManagementPanel client={client} routes={routes} employees={employees} reload={reload} /> },
     { key: 'employees', label: 'Employees', children: <EmployeePanel client={client} employees={employees} reload={reload} /> },
     { key: 'devices', label: 'Devices', children: <DevicePanel client={client} buses={buses} devices={devices} reload={reload} /> },
-    { key: 'route', label: 'Route history', children: <RouteHistoryPanel client={client} buses={buses} selectedBusId={selectedBusId} setSelectedBusId={setSelectedBusId} /> },
+    { key: 'route', label: 'Bus history', children: <RouteHistoryPanel client={client} buses={buses} selectedBusId={selectedBusId} setSelectedBusId={setSelectedBusId} /> },
     { key: 'events', label: 'Boarding events', children: <BoardingEventsPanel client={client} buses={buses} selectedBusId={selectedBusId} setSelectedBusId={setSelectedBusId} /> },
   ]} /></Content></Layout>
 }
