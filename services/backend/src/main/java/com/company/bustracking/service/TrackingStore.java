@@ -81,6 +81,33 @@ public class TrackingStore {
         return rs.wasNull() ? null : value;
     }
 
+    public double mileageMeters(List<RoutePoint> points) {
+        double total = 0;
+        for (int index = 1; index < points.size(); index++) {
+            RoutePoint previous = points.get(index - 1);
+            RoutePoint current = points.get(index);
+            if (previous.accuracyMeters() != null && previous.accuracyMeters() > 100
+                    || current.accuracyMeters() != null && current.accuracyMeters() > 100) continue;
+            long elapsedMillis = current.recordedAt().toEpochMilli() - previous.recordedAt().toEpochMilli();
+            if (elapsedMillis <= 0) continue;
+            double distance = haversineMeters(previous.latitude(), previous.longitude(),
+                    current.latitude(), current.longitude());
+            double speedKph = distance / elapsedMillis * 3600.0;
+            if (speedKph <= 150) total += distance;
+        }
+        return total;
+    }
+
+    private double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
+        double earthRadius = 6_371_000;
+        double latDelta = Math.toRadians(lat2 - lat1);
+        double lonDelta = Math.toRadians(lon2 - lon1);
+        double value = Math.sin(latDelta / 2) * Math.sin(latDelta / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(lonDelta / 2) * Math.sin(lonDelta / 2);
+        return earthRadius * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+    }
+
     public enum InsertResult { INSERTED, IDEMPOTENT, CONFLICT }
 
     private record StoredPoint(

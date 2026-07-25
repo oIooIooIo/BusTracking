@@ -1,10 +1,15 @@
-export type Bus = { id: string; code: string; name: string; hardwareSerial?: string; active: boolean; permissionVersion: number; permissionCount: number }
-export type Employee = { id: string; employeeNo: string; name: string; cardSn: string; active: boolean }
+export type RouteSummary = { id: string; code: string; name: string }
+export type Stop = { id: string; code: string; name: string; latitude: number; longitude: number; radiusMeters: number; active: boolean; routeCount: number; order?: number }
+export type StopInput = { name: string; latitude: number; longitude: number; radiusMeters: number; active: boolean }
+export type RouteInput = { code: string; name: string; active: boolean; stopIds: string[] }
+export type Route = RouteSummary & { active: boolean; permissionVersion: number; employeeCount: number; busCount: number; stops: Stop[] }
+export type Bus = { id: string; code: string; name: string; hardwareSerial?: string; active: boolean; permissionVersion: number; permissionCount: number; routes: RouteSummary[]; desiredConfigurationVersion: number; appliedConfigurationVersion?: number; configurationSynced: boolean; configurationAppliedAt?: string }
+export type Employee = { id: string; employeeNo: string; name: string; department: string; cardSn: string; active: boolean }
 export type Device = { id: string; deviceCode: string; hardwareSerial: string; busId: string; busCode: string; active: boolean; lastSeenAt?: string }
 export type DeviceAssignment = { id: string; deviceId: string; busId: string; busCode: string; busName: string; installedAt: string; removedAt?: string }
 export type RoutePoint = { recordedAt: string; latitude: number; longitude: number; accuracyMeters?: number }
-export type RouteHistory = { busId: string; from: string; to: string; points: RoutePoint[] }
-export type BoardingEvent = { id: string; employeeId?: string; cardSn: string; result: string; scannedAt: string; permissionVersion?: number }
+export type RouteHistory = { busId: string; from: string; to: string; dailyMileageKm: number; points: RoutePoint[] }
+export type BoardingEvent = { id: string; employeeId?: string; employeeNo?: string; employeeName?: string; employeeDepartment?: string; cardSn: string; result: string; eventType: string; scannedAt: string; permissionVersion?: number; busId: string; deviceId: string; routes: RouteSummary[]; stopId?: string; stopName?: string; latitude?: number; longitude?: number; locationRecordedAt?: string; locationSource: string; accuracyMeters?: number }
 
 type Credentials = { username: string; password: string }
 const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api/admin/v1'
@@ -24,6 +29,23 @@ export function api(credentials: Credentials) {
   }
   return {
     buses: () => request<Bus[]>('/buses'),
+    routes: () => request<Route[]>('/routes'),
+    stops: (q?: string, active?: boolean) => {
+      const params = new URLSearchParams()
+      if (q) params.set('q', q)
+      if (active !== undefined) params.set('active', String(active))
+      return request<Stop[]>(`/stops?${params}`)
+    },
+    createStop: (input: StopInput) => request<Stop>('/stops', { method: 'POST', body: JSON.stringify(input) }),
+    updateStop: (id: string, input: StopInput) => request<Stop>('/stops/' + id, { method: 'PUT', body: JSON.stringify(input) }),
+    stopRoutes: (id: string) => request<RouteSummary[]>('/stops/' + id + '/routes'),
+    createRoute: (input: RouteInput) => request<Route>('/routes', { method: 'POST', body: JSON.stringify(input) }),
+    updateRoute: (id: string, input: RouteInput) => request<Route>('/routes/' + id, { method: 'PUT', body: JSON.stringify(input) }),
+    routePermissions: (routeId: string) => request<Employee[]>('/routes/' + routeId + '/permissions'),
+    grantRoutePermissions: (routeId: string, employeeIds: string[]) => request<void>('/routes/' + routeId + '/permissions/batch', { method: 'POST', body: JSON.stringify({ employeeIds }) }),
+    revokeRoutePermission: (routeId: string, employeeId: string) => request<void>('/routes/' + routeId + '/permissions/' + employeeId, { method: 'DELETE' }),
+    assignedRoutes: (busId: string) => request<string[]>('/buses/' + busId + '/routes'),
+    assignRoutes: (busId: string, routeIds: string[]) => request<void>('/buses/' + busId + '/routes', { method: 'PUT', body: JSON.stringify({ routeIds }) }),
     createBus: (input: { code: string; name: string; hardwareSerial: string; active: boolean }) => request<Bus>('/buses', { method: 'POST', body: JSON.stringify(input) }),
     updateBus: (id: string, input: { code: string; name: string; active: boolean; clearPermissions: boolean }) => request<Bus>(`/buses/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
     devices: () => request<Device[]>('/devices'),

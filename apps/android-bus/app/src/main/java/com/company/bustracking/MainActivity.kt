@@ -26,6 +26,7 @@ import com.company.bustracking.device.HardwareIdentity
 import com.company.bustracking.nfc.CardLanReader
 import com.company.bustracking.sync.SyncScheduler
 import com.company.bustracking.tracking.LocationTrackingService
+import com.company.bustracking.tracking.ScanLocationProvider
 import kotlinx.coroutines.launch
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicLong
@@ -42,6 +43,7 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     private lateinit var binding: ActivityMainBinding
     private lateinit var database: BusDatabase
     private lateinit var localStore: LocalStore
+    private lateinit var scanLocationProvider: ScanLocationProvider
     private var nfcAdapter: NfcAdapter? = null
     private lateinit var cardLanReader: CardLanReader
     @Volatile
@@ -64,6 +66,7 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         setContentView(binding.root)
         database = BusDatabase.get(this)
         localStore = LocalStore(database)
+        scanLocationProvider = ScanLocationProvider(this)
         nfcAdapter = NfcAdapter.getDefaultAdapter(this)
         cardLanReader = CardLanReader(
             onCardDetected = ::processCard,
@@ -187,17 +190,19 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         }
         val scanId = latestScanId.incrementAndGet()
         resetScanResult?.let(mainHandler::removeCallbacks)
-        Log.i(TAG, "Card detected: $cardSn")
+        Log.i(TAG, "Card detected")
+        val scannedAt = System.currentTimeMillis()
         lifecycleScope.launch {
             val decision = localStore.checkCard(cardSn)
-            localStore.recordBoarding(cardSn, decision)
-            SyncScheduler.enqueueNow(this@MainActivity)
             runOnUiThread {
                 if (scanId == latestScanId.get()) {
                     showDecision(cardSn, decision, scanId)
                 }
-                refreshStatus()
             }
+            val capture = scanLocationProvider.capture()
+            localStore.recordBoarding(cardSn, decision, scannedAt, capture)
+            SyncScheduler.enqueueNow(this@MainActivity)
+            runOnUiThread { refreshStatus() }
         }
     }
 
@@ -270,6 +275,10 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
             }
             binding.deviceStatus.text = buildString {
                 append(state?.busCode ?: "Bus not synchronized")
+                if (!state?.routeNames.isNullOrBlank()) {
+                    append(" / ")
+                    append(state?.routeNames)
+                }
                 append(" / ")
                 append(nfcState)
                 append("\nPermission version: ")

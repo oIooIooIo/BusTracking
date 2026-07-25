@@ -54,12 +54,12 @@ integrated into a car booking system without rewriting device-specific logic.
 
 The Demo uses cached authorization:
 
-- The Android app downloads the current bus's allowed CardSN list.
+- The Android app downloads the union of allowed CardSN lists for all routes currently assigned to its bus.
 - The latest successfully downloaded list is stored in Room.
 - NFC checks use the local list, so they work without network access.
 - The app refreshes the list after startup, when connectivity returns, and
   periodically while online.
-- Permission changes made while a bus is offline take effect only after its
+- Route or permission changes made while a bus is offline take effect only after its
   next successful synchronization.
 - If a newly installed device has never downloaded a list, it reports that
   authorization data is not ready instead of silently allowing boarding.

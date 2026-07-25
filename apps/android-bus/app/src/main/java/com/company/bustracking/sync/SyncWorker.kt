@@ -20,7 +20,9 @@ class SyncWorker(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             localStore.pruneOldGps()
-            localStore.replacePermissions(api.permissionSnapshot())
+            val snapshot = api.permissionSnapshot()
+            localStore.replacePermissions(snapshot)
+            api.acknowledgeConfiguration(snapshot.version)
             uploadGpsQueue()
             uploadEventQueue()
             Result.success()
