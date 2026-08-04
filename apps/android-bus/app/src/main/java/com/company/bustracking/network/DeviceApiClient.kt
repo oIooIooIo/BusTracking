@@ -13,7 +13,11 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Instant
 
-class DeviceApiClient {
+class DeviceApiClient(
+    private val apiBaseUrl: String = BuildConfig.API_BASE_URL,
+    private val deviceApiKey: String = BuildConfig.DEVICE_API_KEY,
+    private val hardwareSerial: String = HardwareIdentity.serial,
+) {
     fun permissionSnapshot(): LocalStore.PermissionSnapshotData {
         val json = request("permissions", "GET")
         val bus = json.getJSONObject("bus")
@@ -116,15 +120,15 @@ class DeviceApiClient {
     }
 
     private fun request(path: String, method: String, body: JSONObject? = null): JSONObject {
-        val connection = (URL(BuildConfig.API_BASE_URL + path).openConnection() as HttpURLConnection)
+        val connection = (URL(apiBaseUrl + path).openConnection() as HttpURLConnection)
         try {
             connection.requestMethod = method
             connection.connectTimeout = 10_000
             connection.readTimeout = 20_000
-            connection.setRequestProperty("Authorization", "Bearer ${BuildConfig.DEVICE_API_KEY}")
+            connection.setRequestProperty("Authorization", "Bearer $deviceApiKey")
             connection.setRequestProperty(
                 HARDWARE_SERIAL_HEADER,
-                HardwareIdentity.serial,
+                hardwareSerial,
             )
             connection.setRequestProperty("Accept", "application/json")
             if (body != null) {

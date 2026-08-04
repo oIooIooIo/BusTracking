@@ -24,7 +24,7 @@ abstract class BusDatabase : RoomDatabase() {
     abstract fun boardingEvents(): BoardingEventDao
 
     companion object {
-        private val MIGRATION_1_2 = object : Migration(1, 2) {
+        internal val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE device_state ADD COLUMN route_ids TEXT NOT NULL DEFAULT ''")
                 db.execSQL("ALTER TABLE device_state ADD COLUMN route_names TEXT NOT NULL DEFAULT ''")
