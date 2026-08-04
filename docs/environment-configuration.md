@@ -35,10 +35,11 @@
 | 執行方式 | 電腦直接啟動，不使用 Docker | Offline Docker images | Offline Docker images |
 | Admin Web | `http://localhost:5173` | `https://taxiportal-dev.fushan.fihnbb.com` | 待定 |
 | Backend | `http://localhost:8080` | Docker 內部 `backend:8080`，由 Nginx proxy | 待定 |
-| Android API | Emulator 使用 `http://10.0.2.2:8080/api/device/v1/` | `https://taxiportal-dev.fushan.fihnbb.com/api/device/v1/` | 待定 |
+| Android API | USB ADB reverse 使用 `http://127.0.0.1:8080/api/device/v1/` | `https://taxiportal-dev.fushan.fihnbb.com/api/device/v1/` | 待定 |
 | PostgreSQL | 電腦 `localhost:5432` | Docker service `postgres:5432` | 待定 |
 | Redis | 電腦 `localhost:6379` | Docker service `redis:6379` | 待定 |
 | TLS | 不使用 | 使用 IT 提供的憑證 | 待定 |
+| 發布策略 | 不適用 | Blue-Green，實作尚待第二階段完成 | Blue-Green，實作尚待第二階段完成 |
 
 ## LOCAL：完全不使用 Docker
 
@@ -70,7 +71,7 @@ cp config/environments/local.env.example .env.local
 ./scripts/environment/start-local.sh frontend
 ```
 
-建置 Android emulator APK：
+建置供 USB 實體裝置使用的 Android APK：
 
 ```bash
 ./scripts/environment/start-local.sh mobile
@@ -79,7 +80,15 @@ cp config/environments/local.env.example .env.local
 若要使用已批准的未追蹤 runtime 檔，將路徑作為最後一個參數，例如
 `./scripts/environment/start-local.sh backend .env.local`。
 
-Android emulator 不能用 `localhost` 連到電腦，因此固定使用 `10.0.2.2`。實體 Android 裝置需要使用電腦 LAN IP；該變更只能寫入未追蹤的 runtime 檔案，並須先取得批准。
+LOCAL Android 固定透過 USB ADB reverse 連到電腦上的 native Backend：
+
+```bash
+adb reverse tcp:8080 tcp:8080
+```
+
+APK 使用 `http://127.0.0.1:8080/api/device/v1/`。安裝、更新 APK、測試或同步
+資料前都必須先確認 USB 連線與 ADB reverse；不得在例行測試時改成 LAN IP、
+DEV URL 或其他未批准的 endpoint。
 
 ## DEV：Offline Docker images
 
@@ -109,6 +118,15 @@ VM 載入 images 後，使用同一份已批准的 runtime 檔案：
 ./scripts/environment/deploy-offline.sh dev .env.dev
 ```
 
+DEV 已決定採用 Blue-Green：新版本必須先在 inactive stack 啟動，通過
+health/readiness 與 smoke test 後才切換流量；舊 stack 必須完成連線排空並暫時
+保留供 rollback。例行應用發布不得重建 PostgreSQL、Redis 或未來的常駐 edge
+proxy。
+
+目前 `infra/vm/compose.yaml` 與 `deploy-offline.sh` 仍是單一 application
+stack，尚未實作上述流程，因此現階段不得宣稱該指令可以零停機更新。第二階段
+實作完成並經擁有者批准前，實際 DEV 部署仍須另外取得明確同意。
+
 ## PROD：欄位先建立、值保持空白
 
 `config/environments/prod.env.example` 已包含與 LOCAL、DEV 相同類別的欄位，但除 `APP_ENV=prod` 外不填值。未來需逐項確認：
@@ -122,6 +140,24 @@ VM 載入 images 後，使用同一份已批准的 runtime 檔案：
 - 防火牆、連接埠與正式部署位置
 
 所有值都必須經專案擁有者明確批准後才能寫入。
+
+PROD 確定使用 Docker、Offline Images、DNS 與 DEV 相同的 Blue-Green 發布
+原則，但目前 Server、DNS 與環境值仍在準備中。未核准的 PROD 值必須保持
+空白；第二階段 Blue-Green 實作完成並通過 DEV 演練前，不得執行 PROD 部署。
+
+## 執行前確認
+
+每次執行測試、建置、打包或部署前，Codex 必須先列出：
+
+1. 目標環境：LOCAL、DEV 或 PROD。
+2. 操作類型與受影響元件。
+3. 使用的環境檔案。
+4. 將執行的完整命令。
+5. 是否接觸 PostgreSQL、Redis、Docker、Android 裝置或 Server。
+6. 確認不修改任何環境欄位和值。
+7. 詢問專案擁有者並取得明確同意。
+
+未取得該次操作的明確同意前，不得開始執行。
 
 ## 元件與欄位對照
 

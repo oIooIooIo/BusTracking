@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980" role="img" aria-labelledby="title desc">
+  <title id="title">Bus Tracking service architecture and data flow</title>
+  <desc id="desc">Android buses and administrator browsers connect through public DNS and HTTPS to Nginx, the Admin Web, Backend API, PostgreSQL PostGIS, and reserved Redis. Administrator browsers request OpenStreetMap tiles directly.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+    </marker>
+    <style>
+      .title { font: 700 34px Arial, sans-serif; fill: #0f172a; }
+      .subtitle { font: 400 18px Arial, sans-serif; fill: #475569; }
+      .group-title { font: 700 23px Arial, sans-serif; fill: #0f172a; }
+      .box-title { font: 700 19px Arial, sans-serif; fill: #0f172a; }
+      .box-text { font: 400 15px Arial, sans-serif; fill: #334155; }
+      .edge-text { font: 600 14px Arial, sans-serif; fill: #334155; paint-order: stroke; stroke: #f8fafc; stroke-width: 5px; stroke-linejoin: round; }
+      .flow { fill: none; stroke: #334155; stroke-width: 2.5; marker-end: url(#arrow); }
+      .dash { stroke-dasharray: 9 7; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="980" fill="#f8fafc"/>
+  <text x="70" y="62" class="title">Bus Tracking Service Architecture and Data Flow</text>
+  <text x="70" y="94" class="subtitle">Public access, device authentication, persistence, administration, and map-tile flow</text>
+
+  <rect x="55" y="145" width="390" height="590" rx="24" fill="#eff6ff" stroke="#60a5fa" stroke-width="2"/>
+  <text x="85" y="190" class="group-title">Android Bus Box</text>
+
+  <rect x="90" y="225" width="140" height="84" rx="14" fill="#ffffff" stroke="#93c5fd" stroke-width="2"/>
+  <text x="160" y="260" text-anchor="middle" class="box-title">NFC Reader</text>
+  <text x="160" y="285" text-anchor="middle" class="box-text">Card scans</text>
+
+  <rect x="270" y="225" width="140" height="84" rx="14" fill="#ffffff" stroke="#93c5fd" stroke-width="2"/>
+  <text x="340" y="260" text-anchor="middle" class="box-title">GPS</text>
+  <text x="340" y="285" text-anchor="middle" class="box-text">Location</text>
+
+  <rect x="120" y="365" width="260" height="100" rx="14" fill="#dbeafe" stroke="#3b82f6" stroke-width="2"/>
+  <text x="250" y="405" text-anchor="middle" class="box-title">Android Bus App</text>
+  <text x="250" y="432" text-anchor="middle" class="box-text">Offline boarding authorization</text>
+
+  <rect x="120" y="515" width="260" height="84" rx="14" fill="#ffffff" stroke="#93c5fd" stroke-width="2"/>
+  <text x="250" y="550" text-anchor="middle" class="box-title">Room Offline Store</text>
+  <text x="250" y="575" text-anchor="middle" class="box-text">Queues + permission snapshot</text>
+
+  <rect x="120" y="645" width="260" height="64" rx="14" fill="#ffffff" stroke="#93c5fd" stroke-width="2"/>
+  <text x="250" y="684" text-anchor="middle" class="box-title">WorkManager Sync</text>
+
+  <path class="flow" d="M160 309 L160 345 L205 345 L205 365"/>
+  <path class="flow" d="M340 309 L340 345 L295 345 L295 365"/>
+  <path class="flow" d="M250 465 L250 515"/>
+  <path class="flow" d="M250 599 L250 645"/>
+
+  <rect x="535" y="270" width="300" height="140" rx="18" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+  <text x="685" y="310" text-anchor="middle" class="box-title">Public DNS + HTTPS Entry</text>
+  <text x="685" y="338" text-anchor="middle" class="box-text">To be provided by IT</text>
+  <text x="685" y="365" text-anchor="middle" class="box-text">DNS + routing/NAT + firewall</text>
+  <text x="685" y="390" text-anchor="middle" class="box-text">TLS certificate, port 443</text>
+
+  <rect x="915" y="145" width="625" height="590" rx="24" fill="#f0fdf4" stroke="#4ade80" stroke-width="2"/>
+  <text x="945" y="190" class="group-title">Bus Tracking VM</text>
+
+  <rect x="960" y="245" width="220" height="100" rx="14" fill="#dcfce7" stroke="#22c55e" stroke-width="2"/>
+  <text x="1070" y="284" text-anchor="middle" class="box-title">Nginx / TLS</text>
+  <text x="1070" y="312" text-anchor="middle" class="box-text">HTTPS 443 entry point</text>
+
+  <rect x="1265" y="220" width="220" height="90" rx="14" fill="#ffffff" stroke="#86efac" stroke-width="2"/>
+  <text x="1375" y="256" text-anchor="middle" class="box-title">React Admin Web</text>
+  <text x="1375" y="282" text-anchor="middle" class="box-text">Static files</text>
+
+  <rect x="1265" y="365" width="220" height="105" rx="14" fill="#dcfce7" stroke="#22c55e" stroke-width="2"/>
+  <text x="1375" y="404" text-anchor="middle" class="box-title">Spring Boot API</text>
+  <text x="1375" y="432" text-anchor="middle" class="box-text">Device + Admin APIs</text>
+  <text x="1375" y="454" text-anchor="middle" class="box-text">Authentication and rules</text>
+
+  <rect x="960" y="550" width="260" height="105" rx="14" fill="#ffffff" stroke="#86efac" stroke-width="2"/>
+  <text x="1090" y="590" text-anchor="middle" class="box-title">PostgreSQL + PostGIS</text>
+  <text x="1090" y="618" text-anchor="middle" class="box-text">System of record</text>
+  <text x="1090" y="640" text-anchor="middle" class="box-text">GPS, boarding, configuration</text>
+
+  <rect x="1280" y="550" width="205" height="105" rx="14" fill="#ffffff" stroke="#86efac" stroke-width="2"/>
+  <text x="1382" y="590" text-anchor="middle" class="box-title">Redis</text>
+  <text x="1382" y="618" text-anchor="middle" class="box-text">Configured / reserved</text>
+  <text x="1382" y="640" text-anchor="middle" class="box-text">No business flow yet</text>
+
+  <path class="flow" d="M835 340 L915 340 L915 295 L960 295"/>
+  <path class="flow" d="M1180 280 L1265 265"/>
+  <text x="1220" y="256" text-anchor="middle" class="edge-text">Static UI</text>
+  <path class="flow" d="M1180 315 L1225 315 L1225 418 L1265 418"/>
+  <text x="1215" y="380" text-anchor="middle" class="edge-text">/api/*</text>
+  <path class="flow" d="M1345 470 L1160 550"/>
+  <text x="1220" y="505" text-anchor="middle" class="edge-text">Read / write</text>
+  <path class="flow dash" d="M1400 470 L1400 550"/>
+  <text x="1470" y="515" text-anchor="middle" class="edge-text">Reserved</text>
+
+  <path class="flow" d="M380 675 L490 675 L490 380 L535 380"/>
+  <text x="495" y="510" text-anchor="middle" class="edge-text" transform="rotate(-90 495 510)">HTTPS: API key + hardware serial</text>
+  <path class="flow" d="M1265 445 L870 445 L870 705 L380 705"/>
+  <text x="690" y="695" text-anchor="middle" class="edge-text">Permission + configuration snapshot</text>
+
+  <rect x="115" y="815" width="330" height="90" rx="16" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="280" y="851" text-anchor="middle" class="box-title">Administrator Browser</text>
+  <text x="280" y="879" text-anchor="middle" class="box-text">Admin Web + Basic Auth API</text>
+
+  <rect x="1090" y="815" width="350" height="90" rx="16" fill="#fff7ed" stroke="#fb923c" stroke-width="2"/>
+  <text x="1265" y="851" text-anchor="middle" class="box-title">OpenStreetMap Tile Servers</text>
+  <text x="1265" y="879" text-anchor="middle" class="box-text">Direct request from browser</text>
+
+  <path class="flow" d="M445 840 L685 840 L685 410"/>
+  <text x="570" y="830" text-anchor="middle" class="edge-text">HTTPS admin access</text>
+  <path class="flow" d="M445 875 L1090 875"/>
+  <text x="770" y="865" text-anchor="middle" class="edge-text">HTTPS map tiles — client network access required</text>
+</svg>

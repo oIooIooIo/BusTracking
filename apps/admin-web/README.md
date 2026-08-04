@@ -5,8 +5,10 @@ React, TypeScript, Vite, Ant Design, and Leaflet administration UI.
 Implemented Demo functions:
 
 - Admin login
-- Bus and employee creation
-- Employee-to-bus permission grant and revoke
+- Bus, employee, and device management
+- Device assignment history
+- Route and shared-stop management
+- Employee-to-route permission grant and revoke
 - Bus route query and map display
 - Boarding-event display
 
@@ -27,7 +29,10 @@ The Vite development server calls the backend at `http://localhost:8080`.
 
 ## Verify
 
+Before execution, Codex must identify the LOCAL environment and exact commands
+and receive the owner's confirmation. Run from the repository root:
+
 ```bash
-cd apps/admin-web && npm run lint
-./scripts/environment/build-frontend.sh local
+(cd apps/admin-web && npm run lint)
+./scripts/environment/build-frontend.sh local .env.local
 ```

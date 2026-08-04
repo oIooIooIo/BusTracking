@@ -37,8 +37,10 @@ Do not use these built-in credentials outside a local Demo.
 
 ## API Groups
 
-- `/api/device/v1`: permission snapshot, GPS batches, boarding-event batches
-- `/api/admin/v1`: buses, employees, permissions, routes, boarding events
+- `/api/device/v1`: permission/configuration synchronization, GPS batches,
+  and boarding-event batches
+- `/api/admin/v1`: buses, devices, device assignment history, employees,
+  routes, shared stops, route permissions, route history, and boarding events
 
 Device batches are limited to 1 MB. GPS accepts at most 500 records and
 boarding events at most 200 records per request. Route queries are limited to
@@ -46,10 +48,16 @@ boarding events at most 200 records per request. Route queries are limited to
 
 ## Build
 
+Backend verification is a LOCAL operation and uses native PostgreSQL/PostGIS
+and Redis. It must not target DEV or PROD. Before execution, Codex must list the
+exact environment file and commands and receive the owner's confirmation.
+
+From the repository root:
+
 ```bash
 source scripts/environment/load-env.sh
-bus_env_load local
-cd services/backend && ./mvnw clean test package
+bus_env_load local .env.local
+(cd services/backend && ./mvnw clean test package)
 ```
 
 Flyway migrations are in `src/main/resources/db/migration`.

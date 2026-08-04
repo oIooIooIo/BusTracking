@@ -9,10 +9,16 @@ the relevant data proposal.
 Approval should cover both persistence and externally visible data. A database
 field is not automatically an API field.
 
-## Confirmed Demo Decisions
+## Current Confirmed Demo Decisions
 
 - NFC identification uses the CardSN returned by the reader.
-- Boarding permission is a direct employee-to-bus assignment.
+- Boarding permission is assigned from employees to routes. A bus receives the
+  union of permissions from all routes currently assigned to that bus.
+- The earlier direct employee-to-bus permission model is legacy compatibility
+  data only and must not be used as the design for new features.
+- Routes use shared ordered stops, and employees include a department field.
+- Devices may be unassigned or reassigned between buses. Assignment history is
+  retained, and at most one active device may be assigned to a bus.
 - The Android app must check permission while offline using a local copy of
   the bus permission list.
 - GPS recording starts after boot and continues while the device is running.
@@ -37,12 +43,12 @@ in [Proposed Data Contract](proposed-data-contract.md).
 
 ### Bus and device identity
 
-- What identifier is already used for a bus: internal number, license plate,
-  asset number, or another value?
-- Can one physical Android device move between buses?
-- Does a bus need active/inactive state?
-- The current Demo registers the unique 618K SoC hardware serial manually and
-  maps it to a Bus; all devices use the same APK and deployment API key.
+- Confirm the long-term business identifier for a bus: internal number,
+  license plate, asset number, or another value. The Demo currently uses
+  `bus.code` as its human-readable identifier.
+- The current Demo registers the unique 618K SoC hardware serial manually.
+  Devices can be unassigned or moved between buses, and assignment history is
+  retained. All devices use the same APK and deployment API key.
 
 ### Employee and NFC identity
 
@@ -85,9 +91,9 @@ in [Proposed Data Contract](proposed-data-contract.md).
 - Which UI languages are required?
 - Should API timestamps use UTC while preserving the business timezone?
 
-## Current Approval Artifact
+## Current Approval Artifacts
 
-The current proposal includes:
+The June 13, 2026 baseline proposal includes:
 
 - Proposed tables with field names, types, nullability, keys, and indexes.
 - Proposed relationships and deletion/retention behavior.
@@ -96,4 +102,8 @@ The current proposal includes:
 - Mapping between database fields, API fields, and UI fields.
 
 [Proposed Data Contract](proposed-data-contract.md) was approved on
-June 13, 2026.
+June 13, 2026 as the initial baseline. It has since been partially superseded
+by [Routes and Boarding Location](routes-and-boarding-location.md) and Flyway
+migrations `V5` through `V9`. New work must use the current Flyway schema and
+implemented APIs rather than restoring the baseline's direct bus-permission or
+permanently assigned-device assumptions.

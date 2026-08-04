@@ -1,11 +1,22 @@
-# Proposed Data Contract
+# Baseline Data Contract (Partially Superseded)
 
-Status: **Approved by owner on June 13, 2026.**
+Status: **Approved as the initial baseline on June 13, 2026; partially
+superseded by later approved Route, Stop, boarding-location, and device
+assignment changes.**
 
-This proposal intentionally supports only the agreed Demo behavior:
+This document is retained to explain the original schema and synchronization
+decisions. It is not a complete description of the current application. For
+new implementation work, use the current Flyway migrations, backend API
+records, and [Routes and Boarding Location](routes-and-boarding-location.md).
+In particular, do not reintroduce direct employee-to-bus permission as the
+primary model or assume that a device is permanently assigned to one bus.
+
+The original proposal supported only the initial Demo behavior:
 
 - CardSN identifies an employee card.
-- Permission is assigned directly between an employee and a bus.
+- Permission was initially assigned directly between an employee and a bus.
+  The current model assigns permissions to routes and gives a bus the union of
+  its assigned routes' permissions.
 - Android checks a locally cached permission list when offline.
 - GPS recording runs continuously after device boot.
 
@@ -413,14 +424,19 @@ Route history response:
 | GPS position | PostGIS `position` | Latitude/longitude | Latitude/longitude | Latitude/longitude |
 | Scan outcome | `boarding_event.result` | `result` | Event queue | Boarding history |
 
-## 7. Approved Demo Assumptions
+## 7. Current Demo Assumptions
 
-The owner approved these assumptions on June 13, 2026:
+Items 1-3 below replace the corresponding June 13, 2026 baseline assumptions.
+The remaining items continue to apply unless a later approved document or
+Flyway migration says otherwise:
 
-1. Bus fields: `code`, `name`, and `active` are sufficient.
-2. Employee fields: `employeeNo`, `name`, `cardSn`, and `active` are
-   sufficient.
-3. One Android device is permanently assigned to one bus for the Demo.
+1. Bus includes `code`, `name`, `active`, configuration version, route
+   assignments, and device synchronization state.
+2. Employee includes `employeeNo`, `name`, `department`, `cardSn`, and
+   `active`. Permission is assigned to routes, not directly to a bus for new
+   functionality.
+3. A device may be unassigned or reassigned between buses. Assignment history
+   is retained, and no more than one active device may be assigned to a bus.
 4. CardSN is stored as plaintext for the Demo but excluded from application
    logs.
 5. The offline permission list does not expire during the Demo.
