@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowDownOutlined, ArrowLeftOutlined, ArrowUpOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
-import { Alert, Breadcrumb, Button, Card, Checkbox, Form, Input, InputNumber, Modal, Space, Table, Tag, Typography, message } from 'antd'
+import { ArrowDownOutlined, ArrowLeftOutlined, ArrowUpOutlined, EditOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
+import { Alert, Breadcrumb, Button, Card, Checkbox, Descriptions, Form, Input, InputNumber, Modal, Space, Table, Tag, Typography, Upload, message } from 'antd'
 import L from 'leaflet'
 import { Circle, MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet'
-import { api, type Employee, type Route, type RouteSummary, type Stop, type StopInput } from './api'
+import { api, type Employee, type Route, type RouteImportResult, type RouteSummary, type Stop, type StopInput } from './api'
 
 type Client = ReturnType<typeof api>
 type Point = { latitude: number; longitude: number }
@@ -20,6 +20,7 @@ export default function RouteManagementPanel({ client, routes, employees, reload
   const [editing, setEditing] = useState<Route | null | undefined>()
   const [allowed, setAllowed] = useState<Employee[]>([])
   const [adding, setAdding] = useState(false)
+  const [importing, setImporting] = useState(false)
   const activeRouteId = selectedRouteId ?? routes[0]?.id
   const selectedRoute = routes.find(route => route.id === activeRouteId)
 
@@ -29,7 +30,7 @@ export default function RouteManagementPanel({ client, routes, employees, reload
 
   if (showStops) return <StopCatalog client={client} onBack={() => setShowStops(false)} onChanged={reload} />
   return <Space direction="vertical" size="large" style={{ width: '100%' }}>
-    <Card title="Routes" extra={<Space><Button onClick={() => setShowStops(true)}>Manage stops</Button><Button icon={<PlusOutlined />} onClick={() => setEditing(null)}>Add route</Button></Space>}>
+    <Card title="Routes" extra={<Space><Button icon={<UploadOutlined />} onClick={() => setImporting(true)}>Import Excel</Button><Button onClick={() => setShowStops(true)}>Manage stops</Button><Button icon={<PlusOutlined />} onClick={() => setEditing(null)}>Add route</Button></Space>}>
       <Table rowKey="id" dataSource={routes} pagination={false} onRow={route => ({ onClick: () => setSelectedRouteId(route.id) })} rowClassName={route => route.id === activeRouteId ? 'selected-row' : ''} columns={[
         { title: 'Route code', dataIndex: 'code' }, { title: 'Name', dataIndex: 'name' },
         { title: 'Stops', render: (_, route: Route) => route.stops.map(stop => stop.code).join(' → ') || '—' },
@@ -46,6 +47,98 @@ export default function RouteManagementPanel({ client, routes, employees, reload
     </Card>
     {editing !== undefined && <RouteModal key={editing?.id ?? "new"} route={editing} client={client} onClose={() => setEditing(undefined)} reload={reload} />}
     {adding && activeRouteId && <AddEmployeesModal routeId={activeRouteId} client={client} employees={employees} allowed={allowed} onClose={() => setAdding(false)} onSaved={async () => { setAdding(false); await refreshPermissions() }} />}
+    {importing && <RouteImportModal client={client} onClose={() => setImporting(false)} onImported={reload} />}
+  </Space>
+}
+
+function RouteImportModal({ client, onClose, onImported }: { client: Client; onClose: () => void; onImported: () => Promise<void> }) {
+  const [file, setFile] = useState<File>()
+  const [result, setResult] = useState<RouteImportResult>()
+  const [loading, setLoading] = useState(false)
+  const preview = async () => {
+    if (!file) return
+    setLoading(true)
+    try { setResult(await client.previewRouteImport(file)) }
+    catch (cause) { message.error(cause instanceof Error ? cause.message : 'Unable to preview Excel import') }
+    finally { setLoading(false) }
+  }
+  const commit = async () => {
+    if (!file) return
+    setLoading(true)
+    try {
+      setResult(await client.importRoutes(file))
+      await onImported()
+      message.success('Valid routes and permissions imported')
+    } catch (cause) { message.error(cause instanceof Error ? cause.message : 'Unable to import Excel file') }
+    finally { setLoading(false) }
+  }
+  const canCommit = Boolean(result && !result.committed && (result.newRouteCount > 0 || result.newPermissionCount > 0))
+  return <Modal
+    open
+    width={1000}
+    title="Import route permissions from Excel"
+    onCancel={onClose}
+    footer={<Space>
+      <Button onClick={onClose}>{result?.committed ? 'Close' : 'Cancel'}</Button>
+      {!result && <Button type="primary" loading={loading} disabled={!file} onClick={() => void preview()}>Preview</Button>}
+      {result && !result.committed && <Button onClick={() => { setResult(undefined); setFile(undefined) }}>Choose another file</Button>}
+      {canCommit && <Button type="primary" loading={loading} onClick={() => void commit()}>Import valid rows</Button>}
+    </Space>}
+    destroyOnHidden
+  >
+    <Alert
+      type="info"
+      showIcon
+      message="This import only adds data"
+      description="Số tuyến maps to Route Code. Existing routes and employees are not overwritten, existing permissions are kept, and employees missing from the system are skipped because CardSN is required."
+      style={{ marginBottom: 16 }}
+    />
+    {!result && <Upload.Dragger
+      accept=".xlsx"
+      maxCount={1}
+      beforeUpload={selected => { setFile(selected); return false }}
+      onRemove={() => { setFile(undefined); return true }}
+    >
+      <p className="ant-upload-drag-icon"><UploadOutlined /></p>
+      <p>Choose the GA .xlsx file</p>
+      <p>Required sheet: Master Data. Required columns: ID, Name, Function, Số tuyến, Bus Route.</p>
+    </Upload.Dragger>}
+    {result && <RouteImportReport result={result} />}
+  </Modal>
+}
+
+function RouteImportReport({ result }: { result: RouteImportResult }) {
+  return <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+    <Alert
+      type={result.committed ? 'success' : result.errorCount ? 'warning' : 'info'}
+      showIcon
+      message={result.committed ? 'Import completed' : 'Preview completed — no data has been changed'}
+      description={result.errorCount ? `${result.errorCount} error(s) will be skipped; valid rows can still be imported.` : 'No blocking row errors were found.'}
+    />
+    <Descriptions bordered size="small" column={4} items={[
+      { key: 'rows', label: 'Excel rows', children: result.totalRows },
+      { key: 'valid', label: 'Valid permissions', children: result.validPermissionRows },
+      { key: 'skipped', label: 'Skipped rows', children: result.skippedRows },
+      { key: 'errors', label: 'Errors / warnings', children: `${result.errorCount} / ${result.warningCount}` },
+      { key: 'newRoutes', label: result.committed ? 'Routes created' : 'Routes to create', children: result.newRouteCount },
+      { key: 'existingRoutes', label: 'Existing routes', children: result.existingRouteCount },
+      { key: 'newPermissions', label: result.committed ? 'Permissions created' : 'Permissions to create', children: result.newPermissionCount },
+      { key: 'existingPermissions', label: 'Existing permissions', children: result.existingPermissionCount },
+    ]} />
+    <Table
+      rowKey={(_, index) => String(index)}
+      size="small"
+      dataSource={result.issues}
+      pagination={{ pageSize: 10 }}
+      locale={{ emptyText: 'No errors or warnings' }}
+      columns={[
+        { title: 'Row', dataIndex: 'rowNumber', width: 70, render: value => value || '—' },
+        { title: 'Level', dataIndex: 'severity', width: 90, render: value => value === 'ERROR' ? <Tag color="red">Error</Tag> : <Tag color="orange">Warning</Tag> },
+        { title: 'Route', dataIndex: 'routeCode', width: 90, render: value => value ?? '—' },
+        { title: 'Employee ID', dataIndex: 'employeeNo', width: 130, render: value => value ?? '—' },
+        { title: 'Details', dataIndex: 'message' },
+      ]}
+    />
   </Space>
 }
 

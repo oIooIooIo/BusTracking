@@ -3,6 +3,20 @@ export type Stop = { id: string; code: string; name: string; latitude: number; l
 export type StopInput = { name: string; latitude: number; longitude: number; radiusMeters: number; active: boolean }
 export type RouteInput = { code: string; name: string; active: boolean; stopIds: string[] }
 export type Route = RouteSummary & { active: boolean; permissionVersion: number; employeeCount: number; busCount: number; stops: Stop[] }
+export type RouteImportIssue = { rowNumber: number; severity: 'ERROR' | 'WARNING'; code: string; message: string; employeeNo?: string; routeCode?: string }
+export type RouteImportResult = {
+  committed: boolean
+  totalRows: number
+  validPermissionRows: number
+  skippedRows: number
+  newRouteCount: number
+  existingRouteCount: number
+  newPermissionCount: number
+  existingPermissionCount: number
+  errorCount: number
+  warningCount: number
+  issues: RouteImportIssue[]
+}
 export type Bus = { id: string; code: string; name: string; installedDeviceCode?: string; installedHardwareSerial?: string; active: boolean; permissionVersion: number; permissionCount: number; routes: RouteSummary[]; desiredConfigurationVersion: number; appliedConfigurationVersion?: number; configurationSynced: boolean; configurationAppliedAt?: string }
 export type Employee = { id: string; employeeNo: string; name: string; department: string; cardSn: string; active: boolean }
 export type Device = { id: string; deviceCode: string; hardwareSerial: string; busId?: string; busCode?: string; active: boolean; lastSeenAt?: string }
@@ -16,9 +30,12 @@ const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api/admin
 
 export function api(credentials: Credentials) {
   const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
+    const headers = new Headers(init?.headers)
+    headers.set('Authorization', `Basic ${btoa(`${credentials.username}:${credentials.password}`)}`)
+    if (!(init?.body instanceof FormData) && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
     const response = await fetch(`${baseUrl}${path}`, {
       ...init,
-      headers: { Authorization: `Basic ${btoa(`${credentials.username}:${credentials.password}`)}`, 'Content-Type': 'application/json', ...init?.headers },
+      headers,
     })
     if (!response.ok) {
       const body = await response.json().catch(() => ({ message: response.statusText }))
@@ -41,6 +58,16 @@ export function api(credentials: Credentials) {
     stopRoutes: (id: string) => request<RouteSummary[]>('/stops/' + id + '/routes'),
     createRoute: (input: RouteInput) => request<Route>('/routes', { method: 'POST', body: JSON.stringify(input) }),
     updateRoute: (id: string, input: RouteInput) => request<Route>('/routes/' + id, { method: 'PUT', body: JSON.stringify(input) }),
+    previewRouteImport: (file: File) => {
+      const body = new FormData()
+      body.append('file', file)
+      return request<RouteImportResult>('/routes/import/preview', { method: 'POST', body })
+    },
+    importRoutes: (file: File) => {
+      const body = new FormData()
+      body.append('file', file)
+      return request<RouteImportResult>('/routes/import', { method: 'POST', body })
+    },
     routePermissions: (routeId: string) => request<Employee[]>('/routes/' + routeId + '/permissions'),
     grantRoutePermissions: (routeId: string, employeeIds: string[]) => request<void>('/routes/' + routeId + '/permissions/batch', { method: 'POST', body: JSON.stringify({ employeeIds }) }),
     revokeRoutePermission: (routeId: string, employeeId: string) => request<void>('/routes/' + routeId + '/permissions/' + employeeId, { method: 'DELETE' }),

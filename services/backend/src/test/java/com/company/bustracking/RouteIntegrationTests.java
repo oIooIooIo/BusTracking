@@ -1,10 +1,12 @@
 package com.company.bustracking;
 
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -12,6 +14,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.ByteArrayOutputStream;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -20,6 +24,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
@@ -90,5 +95,89 @@ class RouteIntegrationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.routes", hasSize(2)))
                 .andExpect(jsonPath("$.employees[0].department", is("Unassigned")));
+    }
+
+    @Test
+    void routeExcelImportPreviewsErrorsAndCommitsValidRowsIdempotently() throws Exception {
+        MockMultipartFile file = routeImportFile();
+
+        mvc.perform(multipart("/api/admin/v1/routes/import/preview")
+                        .file(file)
+                        .with(httpBasic("admin", "admin123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.committed", is(false)))
+                .andExpect(jsonPath("$.totalRows", is(2)))
+                .andExpect(jsonPath("$.newRouteCount", is(1)))
+                .andExpect(jsonPath("$.newPermissionCount", is(1)))
+                .andExpect(jsonPath("$.errorCount", is(1)))
+                .andExpect(jsonPath("$.issues[*].code", hasItem("EMPLOYEE_NOT_FOUND")))
+                .andExpect(jsonPath("$.issues[*].code",
+                        hasItem("EMPLOYEE_DEPARTMENT_WILL_UPDATE")));
+
+        Long previewRouteCount = jdbc.queryForObject(
+                "SELECT count(*) FROM route WHERE code = '99'", Long.class);
+        org.junit.jupiter.api.Assertions.assertEquals(0L, previewRouteCount);
+        org.junit.jupiter.api.Assertions.assertEquals("Unassigned", jdbc.queryForObject(
+                "SELECT department FROM employee WHERE employee_no = 'E00201'", String.class));
+
+        mvc.perform(multipart("/api/admin/v1/routes/import")
+                        .file(routeImportFile())
+                        .with(httpBasic("admin", "admin123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.committed", is(true)))
+                .andExpect(jsonPath("$.newRouteCount", is(1)))
+                .andExpect(jsonPath("$.newPermissionCount", is(1)))
+                .andExpect(jsonPath("$.errorCount", is(1)));
+
+        Long permissionCount = jdbc.queryForObject("""
+                SELECT count(*) FROM route_employee_permission permission
+                JOIN route ON route.id = permission.route_id
+                JOIN employee ON employee.id = permission.employee_id
+                WHERE route.code = '99' AND employee.employee_no = 'E00201'
+                """, Long.class);
+        org.junit.jupiter.api.Assertions.assertEquals(1L, permissionCount);
+        org.junit.jupiter.api.Assertions.assertEquals("Engineering", jdbc.queryForObject(
+                "SELECT department FROM employee WHERE employee_no = 'E00201'", String.class));
+
+        mvc.perform(multipart("/api/admin/v1/routes/import")
+                        .file(routeImportFile())
+                        .with(httpBasic("admin", "admin123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.newRouteCount", is(0)))
+                .andExpect(jsonPath("$.existingRouteCount", is(1)))
+                .andExpect(jsonPath("$.newPermissionCount", is(0)))
+                .andExpect(jsonPath("$.existingPermissionCount", is(1)));
+    }
+
+    private static MockMultipartFile routeImportFile() throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+                ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            var sheet = workbook.createSheet("Master Data");
+            var header = sheet.createRow(1);
+            header.createCell(1).setCellValue("ID\n(Số ID)");
+            header.createCell(2).setCellValue("Name\n(Ho Ten)");
+            header.createCell(5).setCellValue("Function");
+            header.createCell(7).setCellValue("Số tuyến");
+            header.createCell(8).setCellValue("Bus Route\n(Tuyến Xe)");
+
+            var existingEmployee = sheet.createRow(2);
+            existingEmployee.createCell(1).setCellValue("E00201");
+            existingEmployee.createCell(2).setCellValue("Nguyen An");
+            existingEmployee.createCell(5).setCellValue("Engineering");
+            existingEmployee.createCell(7).setCellValue(99);
+            existingEmployee.createCell(8).setCellValue("HC Test");
+
+            var missingEmployee = sheet.createRow(3);
+            missingEmployee.createCell(1).setCellValue("V99999");
+            missingEmployee.createCell(2).setCellValue("Missing Employee");
+            missingEmployee.createCell(5).setCellValue("Engineering");
+            missingEmployee.createCell(7).setCellValue(99);
+            missingEmployee.createCell(8).setCellValue("HC Test");
+
+            workbook.write(output);
+            return new MockMultipartFile("file", "routes.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    output.toByteArray());
+        }
     }
 }

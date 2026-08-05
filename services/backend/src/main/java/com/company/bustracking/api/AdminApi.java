@@ -22,15 +22,19 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/admin/v1")
 public class AdminApi {
     private final AdminService service;
     private final com.company.bustracking.service.RouteService routes;
-    public AdminApi(AdminService service, com.company.bustracking.service.RouteService routes) {
+    private final com.company.bustracking.service.RouteExcelImportService routeImports;
+    public AdminApi(AdminService service, com.company.bustracking.service.RouteService routes,
+            com.company.bustracking.service.RouteExcelImportService routeImports) {
         this.service = service;
         this.routes = routes;
+        this.routeImports = routeImports;
     }
 
     @GetMapping("/buses") List<BusView> buses() { return service.buses(); }
@@ -78,6 +82,16 @@ public class AdminApi {
     @DeleteMapping("/routes/{routeId}/permissions/{employeeId}") @ResponseStatus(HttpStatus.NO_CONTENT)
     void revokeRoutePermission(@PathVariable UUID routeId, @PathVariable UUID employeeId) {
         routes.revoke(routeId, employeeId);
+    }
+    @PostMapping(value = "/routes/import/preview", consumes = "multipart/form-data")
+    com.company.bustracking.service.RouteExcelImportService.ImportResult previewRouteImport(
+            @RequestParam("file") MultipartFile file) {
+        return routeImports.importWorkbook(file, false);
+    }
+    @PostMapping(value = "/routes/import", consumes = "multipart/form-data")
+    com.company.bustracking.service.RouteExcelImportService.ImportResult importRoutes(
+            @RequestParam("file") MultipartFile file) {
+        return routeImports.importWorkbook(file, true);
     }
     @GetMapping("/buses/{busId}/routes")
     List<UUID> assignedRoutes(@PathVariable UUID busId) { return routes.assignedRoutes(busId); }
