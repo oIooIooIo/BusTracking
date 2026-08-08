@@ -66,10 +66,18 @@ DEV and PROD APKs connect to their separately approved DNS endpoints. They do
 not use the LOCAL USB tunnel for server communication.
 
 Every API request includes the shared API key and
-`X-Device-Hardware-Serial`. The app reads the 618K SoC serial from
-`/sys/devices/soc0/serial_number` and sends an identifier such as
-`QCM2290-CF8F718B`. The backend maps that unique value to a Device and Bus, so
-all units install the same APK.
+`X-Device-Hardware-Serial`. The Android app must be provisioned as the Device
+Owner of a company-owned Dedicated Device. It configures the fixed Organization
+ID `Fushan`, reads Android's enrollment-specific ID, hashes it with SHA-256, and
+sends `ANDROID-ESID-<64 uppercase hexadecimal characters>`. The enrollment-
+specific ID remains stable for the same physical device, Organization ID, and
+managing app across factory reset and re-enrollment. The app deliberately does
+not use `ANDROID_ID` or a generated fallback UUID. For legacy Cardlan 618K
+units, the app retains the existing `QCM2290-<SoC serial>` identity only when
+the vendor SoC serial file can actually be read. Any other device waits for
+Device Owner enrollment instead of sending a temporary identity. The backend
+maps the resulting identifier to a Device and Bus, so old Cardlan units and new
+Dedicated Device tablets can install the same APK.
 
 On first launch, grant precise location while using the app and notification
 permission. Boot auto-start works only after this initial setup. Some device
@@ -79,5 +87,5 @@ auto-start setting.
 NFC CardSN is converted to uppercase hexadecimal. The seeded allowed card is
 `04A1B2C3D4`.
 
-The hardware serial is an identifier, not a secret. The shared API key must be
+The device identifier is not a secret. The shared API key must be
 provided through deployment configuration in production.

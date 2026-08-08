@@ -15,11 +15,11 @@ val usesCleartextTraffic = providers.gradleProperty("usesCleartextTraffic")
     .getOrElse("false")
 
 android {
-    namespace = "com.company.bustracking"
+    namespace = "com.fushan.bustracking"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.company.bustracking"
+        applicationId = "com.fushan.bustracking"
         minSdk = 26
         targetSdk = 33
         versionCode = 1
