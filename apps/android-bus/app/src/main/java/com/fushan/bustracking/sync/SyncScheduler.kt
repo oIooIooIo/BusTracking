@@ -9,7 +9,9 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.workDataOf
 import com.fushan.bustracking.BuildConfig
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 object SyncScheduler {
@@ -43,7 +45,14 @@ object SyncScheduler {
     }
 
     fun enqueueNow(context: Context) {
+        enqueueNow(context, manual = false)
+    }
+
+    fun enqueueManualNow(context: Context): UUID = enqueueNow(context, manual = true)
+
+    private fun enqueueNow(context: Context, manual: Boolean): UUID {
         val request = OneTimeWorkRequestBuilder<SyncWorker>()
+            .setInputData(workDataOf(SyncWorker.INPUT_MANUAL_SYNC to manual))
             .setConstraints(syncConstraint)
             .setBackoffCriteria(
                 BackoffPolicy.EXPONENTIAL,
@@ -56,6 +65,7 @@ object SyncScheduler {
             ExistingWorkPolicy.REPLACE,
             request,
         )
+        return request.id
     }
 
     private const val MIN_BACKOFF_SECONDS = 30L

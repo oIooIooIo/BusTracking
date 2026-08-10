@@ -19,7 +19,7 @@ class SyncWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val hardwareSerial = DeviceIdentity.value(applicationContext)
-            ?: return@withContext Result.retry()
+            ?: return@withContext failureResult()
         val api = DeviceApiClient(hardwareSerial = hardwareSerial)
         try {
             localStore.pruneOldGps()
@@ -30,9 +30,16 @@ class SyncWorker(
             uploadEventQueue(api)
             Result.success()
         } catch (exception: Exception) {
-            Result.retry()
+            failureResult()
         }
     }
+
+    private fun failureResult(): Result =
+        if (inputData.getBoolean(INPUT_MANUAL_SYNC, false)) {
+            Result.failure()
+        } else {
+            Result.retry()
+        }
 
     private suspend fun uploadGpsQueue(api: DeviceApiClient) {
         while (true) {
@@ -89,6 +96,7 @@ class SyncWorker(
     private class RetryableRowException(code: String) : Exception(code)
 
     companion object {
+        const val INPUT_MANUAL_SYNC = "manual-sync"
         private const val GPS_BATCH_SIZE = 500
         private const val EVENT_BATCH_SIZE = 200
     }

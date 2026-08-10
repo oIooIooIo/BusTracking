@@ -1,6 +1,7 @@
 package com.fushan.bustracking
 
 import android.Manifest
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -18,7 +19,10 @@ import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.fushan.bustracking.data.BusDatabase
 import com.fushan.bustracking.data.LocalStore
 import com.fushan.bustracking.databinding.ActivityMainBinding
@@ -30,6 +34,7 @@ import com.fushan.bustracking.tracking.LocationTrackingService
 import com.fushan.bustracking.tracking.ScanLocationProvider
 import kotlinx.coroutines.launch
 import java.util.Locale
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 
 class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
@@ -55,6 +60,7 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     private val toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100)
     private val latestScanId = AtomicLong()
     private var resetScanResult: Runnable? = null
+    private var manualSyncId: UUID? = null
 
     private val foregroundPermissionRequest =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -78,8 +84,7 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         )
 
         binding.syncNow.setOnClickListener {
-            SyncScheduler.enqueueNow(this)
-            binding.deviceStatus.text = "Synchronization scheduled"
+            startManualSync()
         }
         binding.root.setOnKeyListener { _, _, event ->
             handleCardReaderKey(event)
@@ -245,6 +250,33 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
             ToneGenerator.TONE_PROP_NACK,
             FAILURE_TONE_DURATION_MS,
         )
+    }
+
+    private fun startManualSync() {
+        val workId = SyncScheduler.enqueueManualNow(this)
+        manualSyncId = workId
+        binding.deviceStatus.text = "Synchronization scheduled"
+
+        val workInfo = WorkManager.getInstance(this).getWorkInfoByIdLiveData(workId)
+        val observer = object : Observer<WorkInfo?> {
+            override fun onChanged(value: WorkInfo?) {
+                val state = value?.state ?: return
+                if (!state.isFinished) return
+                workInfo.removeObserver(this)
+                if (manualSyncId != workId) return
+
+                manualSyncId = null
+                refreshStatus()
+                if (state == WorkInfo.State.FAILED && !isFinishing) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Synchronization failed")
+                        .setMessage("Unable to synchronize. Please check the connection and try again.")
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show()
+                }
+            }
+        }
+        workInfo.observe(this, observer)
     }
 
     private fun scheduleScanResultReset(scanId: Long) {
